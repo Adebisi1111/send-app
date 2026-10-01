@@ -63,11 +63,11 @@ Deployed on **Arc testnet**.
 | UsernameRegistry | `0x9e15EEF785340AAECA386d3099404D5c50FA7CF5` |
 | PaymentRequest   | `0x5A531DC4E63EbB98aE8c44411122A54808a35e5a` |
 
-63 contract tests, 31 frontend tests.
+24 contract tests, 5 frontend tests.
 
 ```bash
-cd contracts && forge test     # 63 passing
-npx vitest run                 # 31 passing
+forge test        # 24 passing
+npx vitest run    # 5 passing
 ```
 
 ## Running the frontend
