@@ -738,7 +738,7 @@ export default function Pay() {
       <div className="tabs" role="tablist">
         {([
           ['send', 'Send'],
-          ['ask', 'Ask'],
+          ['ask', 'Request'],
           ['topay', 'To Pay'],
           ['open', 'Open'],
           ['mine', 'Mine'],

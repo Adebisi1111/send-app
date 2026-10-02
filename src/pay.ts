@@ -10,9 +10,9 @@ import { parseAbi } from 'viem';
 export const RPC_URL = import.meta.env.VITE_RPC ?? 'https://rpc.mainnet.arc.io';
 export const IS_LOCAL = RPC_URL.includes('127.0.0.1');
 
-export const USDC = (import.meta.env.VITE_USDC ?? '0x3600000000000000000000000000000000000005') as `0x${string}`;
+export const USDC = (import.meta.env.VITE_USDC ?? '0x3600000000000000000000000000000000000000') as `0x${string}`;
 export const REGISTRY = (import.meta.env.VITE_REGISTRY ?? '0x71508725F355cf017B42Bccd878cff3c8a0bE641') as `0x${string}`;
-export const REQUESTS = (import.meta.env.VITE_REQUESTS ?? '0xd8d5e36feba036fe52589cfbe64e210ecf45f492') as `0x${string}`;
+export const REQUESTS = (import.meta.env.VITE_REQUESTS ?? '0x5fdd3cec76f356d707bfe6fb01029f431f5efca5') as `0x${string}`;
 
 const REGISTRY_ABI_SIG = [
   'function register(string) returns (string)',
