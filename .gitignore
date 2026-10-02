@@ -26,3 +26,8 @@ broadcast/
 deploy-now.mjs
 deploy-fork.mjs
 .commitmsg.txt
+
+# Deployment helpers. Useful, but not part of the app and not needed to build
+# it, so they stay out of the tree to keep the repo to the product itself.
+deploy-fixed.sh
+preflight.sh
