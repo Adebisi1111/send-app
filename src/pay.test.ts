@@ -163,15 +163,15 @@ describe('which side of a request you are on', () => {
 describe('turning wallet errors into something actionable', () => {
   const err = (shortMessage?: string, message?: string) => ({ shortMessage, message });
 
-  it('explains a bare HTTP failure rather than passing it through', () => {
+  it('points at the wallet RPC rather than blaming the app', () => {
     const out = explain(err('Http request failed'));
-    expect(out).toContain('Arc');
-    expect(out).toContain('5042');
+    expect(out).toContain('https://rpc.mainnet.arc.io');
+    expect(out).toContain('wallet settings');
   });
 
   it('recognises the fetch variants wallets use for the same thing', () => {
     for (const m of ['Http request failed', 'fetch failed', 'NetworkError', 'Failed to fetch']) {
-      expect(explain(err(m))).toContain('wallet could not reach Arc');
+      expect(explain(err(m))).toContain('cannot reach Arc');
     }
   });
 

@@ -100,7 +100,10 @@ export const explain = (e: unknown): string => {
   const s = String(raw);
 
   if (/http request failed|fetch failed|network ?error|failed to fetch/i.test(s)) {
-    return 'Your wallet could not reach Arc. Check your internet, then confirm the wallet is on Arc mainnet (chain 5042).';
+    // Reads go through this app's RPC and succeed, so a failure here is the
+    // wallet's own endpoint for Arc. That is the confusing case: it looks like
+    // the whole app is offline when only the wallet's route is.
+    return 'Your wallet cannot reach Arc. Its Arc RPC may be unreachable. Open the wallet settings, find Arc mainnet, and set the RPC URL to https://rpc.mainnet.arc.io';
   }
   if (/user (rejected|denied)|rejected the request/i.test(s)) {
     return 'You cancelled that in your wallet.';

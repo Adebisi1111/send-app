@@ -190,8 +190,43 @@ export default function Pay() {
   const chainId = walletChain ?? wagmiChainId;
   const wrongChain = isConnected && chainId !== arc.id;
 
+  /**
+   * A wallet reaches Arc over whichever RPC *it* has configured for chain 5042,
+   * which is not necessarily the one this app reads over. A stale or unreachable
+   * endpoint there fails every write while reads keep working, which looks like
+   * the app is offline. Ask the wallet what it has and correct it if we can.
+   */
+  const repairWalletRpc = async () => {
+    const w = window as Window & {
+      ethereum?: { request: (a: unknown) => Promise<unknown> };
+    };
+    if (!w.ethereum) return;
+    try {
+      const res = (await w.ethereum.request({
+        method: 'wallet_getAllRpcUrls',
+        params: [{ chainId: '0x13b2' }],
+      })) as { rpcUrls?: { http: string[] }[] } | undefined;
+      const http = res?.rpcUrls?.[0]?.http ?? [];
+      if (!http.length) return;
+      const live = http.filter((u) => { try { return new URL(u).protocol === 'https:'; } catch { return false; } });
+      if (live.length === 1 && live[0] === RPC_URL) return;
+      // Rewrite the wallet's Arc endpoint to the one this app is verified
+      // against. Not every wallet exposes this; failures are ignored.
+      await w.ethereum.request({
+        method: 'wallet_updateEthereumChain',
+        params: [{
+          chainId: '0x13b2',
+          rpcUrls: [RPC_URL, ...live.filter((u) => u !== RPC_URL)],
+        }],
+      });
+    } catch {
+      /* wallet does not support these methods - nothing to repair */
+    }
+  };
+
   const switchToArc = async () => {
     const w = window as Window & { ethereum?: { request: (a: unknown) => Promise<unknown> } };
+    await repairWalletRpc();
     try {
       await w.ethereum?.request({
         method: 'wallet_switchEthereumChain',
