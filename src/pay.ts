@@ -78,9 +78,13 @@ export const ZERO = '0x0000000000000000000000000000000000000000' as const;
 
 export const usdc = (v: bigint): number => Number(v) / 1e6;
 
-/** Format a USDC amount: 4 dp, trailing zeros trimmed. */
+/**
+ * USDC has 6 decimals, so amounts can legitimately be smaller than a thousandth
+ * of a cent. Round to 6 and strip trailing zeros; anything finer than 1e-6 is
+ * not representable and shows as zero.
+ */
 export const fmtUsdc = (v: bigint): string =>
-  (Number(v) / 1e6).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  (Number(v) / 1e6).toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 
 export const short = (a: string): string => `${a.slice(0, 6)}…${a.slice(-4)}`;
 

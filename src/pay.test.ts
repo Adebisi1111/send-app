@@ -31,6 +31,15 @@ describe('usdc formatting', () => {
     expect(fmtUsdc(0n)).toBe('0');
     expect(fmtUsdc(1_500n)).toBe('0.0015');
   });
+
+  it('never rounds a real amount down to zero', () => {
+    // 6 decimals is USDC's actual precision; anything under 0.000001 is
+    // unrepresentable, but a sub-cent request must still read as itself.
+    expect(fmtUsdc(5n)).toBe('0.000005');
+    expect(fmtUsdc(1n)).toBe('0.000001');
+    expect(fmtUsdc(999n)).toBe('0.000999');
+    expect(fmtUsdc(10n)).toBe('0.00001');
+  });
 });
 
 describe('address shortening', () => {

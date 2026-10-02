@@ -610,7 +610,7 @@ export default function Pay() {
 
   // ------------------------------------------------------------ main app
 
-  const renderRequest = (r: Request, mode: 'pay' | 'mine' | 'open') => {
+  const renderRequest = (r: Request, mode: 'pay' | 'mine' | 'history') => {
     const left = remaining(r);
     const open = isOpen(r);
     const isOpenToAll = isOpenRequest(r);
@@ -622,11 +622,9 @@ export default function Pay() {
         </div>
         <div className="req-why">{r.purpose}</div>
         <div className="req-from">
-          {mode === 'mine'
+          {directionOf(r, address ?? zeroAddress) === 'asking'
             ? <>asked of {r.named === ZERO ? 'anyone' : `@${r.username || short(r.named)}`}</>
-            : r.requester === address
-              ? <>you asked for this</>
-              : <>asked of you by @{r.username || short(r.requester)}</>}
+            : <>asked of you by @{r.username || short(r.requester)}</>}
         </div>
 
         {open && left !== r.amount && (
@@ -642,7 +640,7 @@ export default function Pay() {
           </div>
         )}
 
-        {(mode === 'pay' || mode === 'open') && open && (
+        {mode === 'pay' && open && (
           <>
             <div className="req-note">
               Leaves your wallet and goes straight to {r.requester === address ? 'you' : 'the asker'}.
@@ -858,7 +856,7 @@ export default function Pay() {
               {busy ?? 'Nothing here yet. Send someone USDC, or ask them for some.'}
             </div>
           )}
-          {history.map((r) => renderRequest(r, r.requester === address ? 'mine' : 'pay'))}
+          {history.map((r) => renderRequest(r, 'history'))}
         </div>
       )}
 
