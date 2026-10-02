@@ -6,7 +6,7 @@ import { arc } from './chain';
 import {
   USDC, REGISTRY, REQUESTS, REGISTRY_ABI, REQUEST_ABI, ERC20_ABI,
   STATUS, fmtUsdc, short, DAY, ZERO,
-  isOpen, isOpenRequest, remaining, mergeActionable, RPC_URL,
+  isOpen, isOpenRequest, remaining, mergeActionable, directionOf, RPC_URL,
   type Request,
 } from './pay';
 
@@ -128,8 +128,11 @@ export default function Pay() {
    * confusion, so it is one tab now.
    */
   const actionable = useMemo(
-    () => mergeActionable(toPay, openFeed),
-    [toPay, openFeed],
+    () =>
+      mergeActionable(toPay, openFeed).filter(
+        (r) => directionOf(r, address ?? zeroAddress) === 'asked-of-me',
+      ),
+    [toPay, openFeed, address],
   );
 
   const [busy, setBusy] = useState<string | null>(null);
@@ -620,8 +623,10 @@ export default function Pay() {
         <div className="req-why">{r.purpose}</div>
         <div className="req-from">
           {mode === 'mine'
-          ? <>asked of {r.named === ZERO ? 'anyone' : `@${r.username || short(r.named)}`}</>
-          : <>owed to {r.requester === address ? 'you' : short(r.requester)}</>}
+            ? <>asked of {r.named === ZERO ? 'anyone' : `@${r.username || short(r.named)}`}</>
+            : r.requester === address
+              ? <>you asked for this</>
+              : <>asked of you by @{r.username || short(r.requester)}</>}
         </div>
 
         {open && left !== r.amount && (

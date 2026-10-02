@@ -98,6 +98,16 @@ export const isOpenRequest = (r: Request): boolean => isOpen(r) && r.named === Z
  * because it is yours to answer; open requests anyone can settle follow, newest
  * first. Deduplicated by id, since a request can appear in both.
  */
+/**
+ * Which side of a request the connected account is on. The wording and the
+ * controls both depend on it, and getting it wrong shows someone a request
+ * they made as though it had been made of them.
+ */
+export type Direction = 'asking' | 'asked-of-me';
+
+export const directionOf = (r: Request, me: string): Direction =>
+  r.requester.toLowerCase() === me.toLowerCase() ? 'asking' : 'asked-of-me';
+
 export const mergeActionable = (named: Request[], open: Request[]): Request[] => {
   const seen = new Set<string>();
   const out: Request[] = [];

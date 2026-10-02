@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   usdc, fmtUsdc, short, STATUS, DAY, ZERO,
-  isOpen, isOpenRequest, remaining, mergeActionable,
+  isOpen, isOpenRequest, remaining, mergeActionable, directionOf,
   type Request,
 } from './pay';
 
@@ -123,5 +123,30 @@ describe('merging named and open requests into one list', () => {
 
   it('handles an empty list', () => {
     expect(mergeActionable([], [])).toEqual([]);
+  });
+});
+
+describe('which side of a request you are on', () => {
+  const ME = '0x59a8fd5c011FBa95C1C4479E407cdd7e5C1B1213';
+  const OTHER = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+
+  it('is asking when you made the request', () => {
+    expect(directionOf(request({ requester: ME }), ME)).toBe('asking');
+  });
+
+  it('is asked-of-me when someone else made it', () => {
+    expect(directionOf(request({ requester: OTHER }), ME)).toBe('asked-of-me');
+  });
+
+  it('ignores address casing', () => {
+    const shouted = `0x${ME.slice(2).toUpperCase()}` as typeof ME;
+    expect(directionOf(request({ requester: shouted }), ME)).toBe('asking');
+  });
+
+  it('a request you made must never be pending for you', () => {
+    const mine = request({ id: 1n, requester: ME });
+    const theirs = request({ id: 2n, requester: OTHER });
+    const pending = mergeActionable([mine, theirs], []).filter((r) => directionOf(r, ME) !== 'asking');
+    expect(pending.map((r) => r.id)).toEqual([2n]);
   });
 });
