@@ -99,16 +99,36 @@ settled, never an open-ended one.
 
 ## Verified on mainnet
 
-Registration and the request path have been driven end to end:
+Two wallets are registered on the current registry and have driven every flow:
 
 ```
-@ife registered   0x48d3cd11…c874   block 23914000
-@adaeze           0x59a8fd5c…1213
+@ife     0x48d3cd11…c874
+@okiki   0x6c4e29dc…a113
 ```
 
-Pay and Decline were exercised by hand across two wallets on the earlier pair.
-On the current contracts both audit fixes were then confirmed by sending real
-transactions and reading the resulting chain state:
+Usernames on the previous registry were not migrated, so anyone who used the
+earlier deployment has to register again.
+
+### The three flows, on the live contracts
+
+| flow | evidence | result |
+|---|---|---|
+| direct Send | `0x4e3300e7…064a` | 0.01 USDC, balance rose by exactly 0.01 |
+| Request → Pay | `0x3f6a0aad…da73` | request #2, 0.05 USDC, `status = Paid`, `collected = amount` |
+| Request → Decline | request #3 | 0.08 USDC, `status = Declined`, `collected = 0` |
+
+Both request paths were driven between the same two wallets in opposite
+directions, so each side has paid once and declined once. The decline holds the
+guarantee that matters: `responded[3][payer]` is set and `canRespond` returns
+false, so a declined request cannot later be accepted by the same payer.
+
+Payment costs about 164,000 gas against roughly 49,000 for a direct transfer, the
+difference being the contract's bookkeeping.
+
+### The audit fixes, on the current contracts
+
+Both were confirmed by sending real transactions and reading the resulting chain
+state:
 
 - the requester attempted to settle a request they had made themselves; the
   transaction reverted and `statusOf` stayed `Open` with `totalSettled` at zero,
@@ -191,6 +211,15 @@ but the app only creates named requests and only settles them in full. Open
 requests already on chain can still be paid. The product is one person asking
 one named person, so the controls for the rest were removed rather than left
 half-wired.
+
+## Stale proof scripts
+
+`mainnet-proof.mjs`, `request-flow.mjs` and `deploy-check.mjs` are unreferenced
+leftovers from the abandoned escrow model and the wrong-USDC deployment.
+`request-flow.mjs` documents a `release()` flow that the current contract does
+not have, and `mainnet-proof.mjs` hardcodes the obsolete `0x…0005` USDC address.
+They are kept only as a record of what was tried, and must not be read as proofs
+of the current system. The live evidence is the transaction hashes above.
 
 ## Running it
 
