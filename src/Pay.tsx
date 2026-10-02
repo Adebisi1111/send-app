@@ -10,15 +10,55 @@ import {
 
 const client = createPublicClient({ chain: arcMainnet, transport: http() });
 
+// keccak256("getRequest(uint256)")[:4]
+const GET_REQUEST = '0xc58343ef';
+
 // ---------------------------------------------------------------- helpers
 
 async function readRequest(id: bigint): Promise<Request | null> {
+  // viem's generic struct decoder mis-handles this contract's two trailing
+  // dynamic strings: it reads the offset words as lengths and throws on
+  // unsafe integers. Decode the words directly instead — see mainnet-proof.mjs
+  // for the confirmed layout.
   try {
-    const r = await client.readContract({
-      address: REQUESTS, abi: REQUEST_ABI, functionName: 'getRequest', args: [id],
-    });
-    return r as unknown as Request;
-  } catch {
+    const data = (await client.request({
+      method: 'eth_call',
+      params: [{ to: REQUESTS, data: (GET_REQUEST + id.toString(16).padStart(64, '0')) as `0x${string}` }, 'latest'],
+    })) as `0x${string}`;
+    const hex2: string = data.slice(2);
+    const b = new Uint8Array(hex2.length / 2);
+    for (let i = 0; i < b.length; i++) b[i] = parseInt(hex2.substr(i * 2, 2), 16);
+    const word = (i: number): bigint => {
+      let s = '';
+      for (let k = i * 32; k < (i + 1) * 32; k++) s += b[k].toString(16).padStart(2, '0');
+      return BigInt('0x' + s || '0');
+    };
+    // Head/tail: w0 is the struct's byte offset; w3/w4 are the two string
+    // offsets relative to it, each pointing at a length word.
+    const base = Number(word(0));
+    const str = (offsetWord: number): string => {
+      const at = base + Number(word(offsetWord));
+      let len = 0;
+      for (let k = 0; k < 32; k++) len = len * 256 + b[at + k];
+      let out = '';
+      for (let k = at + 32; k < at + 32 + len; k++) out += String.fromCharCode(b[k]);
+      return out;
+    };
+    const hex = (i: number): `0x${string}` =>
+      ('0x' + word(i).toString(16).padStart(40, '0')) as `0x${string}`;
+    return {
+      id,
+      requester: hex(1),
+      recipient: hex(2),
+      username: str(3),
+      purpose: str(4),
+      amount: word(5),
+      expiresAt: word(6),
+      status: Number(word(7)),
+      autoRelease: word(8) === 1n,
+    };
+  } catch (e) {
+    console.error('readRequest failed for id', id.toString(), e);
     return null;
   }
 }
