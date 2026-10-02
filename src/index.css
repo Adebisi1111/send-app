@@ -105,9 +105,13 @@ body {
   display: grid;
   place-items: center;
   color: var(--brand-ink);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.4px;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  /* Nudge down so the letter is optically centred in the square rather than
+     sitting slightly high, which a plain grid placement leaves it. */
+  padding-top: 1px;
   flex-shrink: 0;
 }
 
@@ -1158,4 +1162,28 @@ body {
 .req-why,
 .card-p {
   max-width: 62ch;
+}
+
+
+/* ============================================================
+   legibility floor
+   ============================================================
+   Ten rules sat between 10px and 11.5px. Colour was never the problem — every
+   token clears WCAG AA — but text that small reads as dim no matter how good
+   its contrast ratio is, and the network pill and footer in particular looked
+   washed out on a phone. Nudge the smallest of them up. */
+.net-copy,
+.pill,
+.hint,
+.foot,
+.req-note,
+.label {
+  font-size: max(12px, 1em);
+}
+
+.badge,
+.badge-n,
+.req-from,
+.net-m {
+  font-size: max(11.5px, 1em);
 }
