@@ -29,12 +29,27 @@
   --ok-bg: #0d1a15;
   --ok-line: #1c4a3a;
 
-  /* geometry */
+  /* geometry — radii on Arc's scale (8/10), spacing on a 2px grid */
   --r-sm: 8px;
-  --r: 11px;
-  --r-lg: 16px;
+  --r: 10px;
+  --r-lg: 14px;
 
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  /* spacing: a 2px grid, so every gap is a multiple and nothing lands on a
+     half-pixel. Arbitrary values drift; a named scale does not. */
+  --s1: 2px;
+  --s2: 4px;
+  --s3: 8px;
+  --s4: 12px;
+  --s5: 16px;
+  --s6: 20px;
+  --s7: 24px;
+  --s8: 32px;
+
+  /* Restrained the way Arc's is: a hairline border does the separating, the
+     shadow only lifts the primary surface. Stacked shadows on every card turn a
+     dark UI muddy. */
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.4);
 
   --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
     'Helvetica Neue', sans-serif;
@@ -116,10 +131,10 @@ body {
 }
 
 .brand-name {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 650;
   color: var(--ink);
-  letter-spacing: -0.2px;
+  letter-spacing: -0.4px;
 }
 
 /* network pill */
@@ -169,7 +184,7 @@ body {
 
 .tab {
   flex: 1;
-  padding: 9px 12px;
+  padding: 10px 12px;
   border: none;
   border-radius: var(--r-sm);
   background: transparent;
@@ -206,7 +221,7 @@ body {
   background: var(--bg-elev);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  padding: 20px;
+  padding: var(--s6);
   box-shadow: var(--shadow);
 }
 
@@ -225,12 +240,10 @@ body {
    ============================================================ */
 .label {
   display: block;
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
+  font-size: 13px;
   color: var(--ink-3);
-  margin-bottom: 8px;
-  font-weight: 650;
+  margin-bottom: var(--s2);
+  font-weight: 550;
 }
 
 .label-sp {
@@ -329,8 +342,11 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 11px 16px;
+  gap: var(--s3);
+  /* 44px is the minimum comfortable touch target; below it, primary actions
+     become hard to hit on a phone, which is where most of this gets used. */
+  min-height: 44px;
+  padding: 12px var(--s5);
   border-radius: var(--r-sm);
   border: 1px solid transparent;
   background: var(--brand);
@@ -616,10 +632,10 @@ body {
 }
 
 .bal-amt {
-  font-size: 19px;
-  font-weight: 680;
+  font-size: 17px;
+  font-weight: 650;
   color: var(--ink);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.4px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1172,18 +1188,20 @@ body {
    token clears WCAG AA — but text that small reads as dim no matter how good
    its contrast ratio is, and the network pill and footer in particular looked
    washed out on a phone. Nudge the smallest of them up. */
+/* max(12px, 1em) is not a floor: 1em resolves against the parent, which is
+   itself small, so the small text stayed small. An absolute value is what
+   actually raises it. */
 .net-copy,
 .pill,
 .hint,
 .foot,
 .req-note,
-.label {
-  font-size: max(12px, 1em);
-}
-
+.label,
 .badge,
 .badge-n,
 .req-from,
-.net-m {
-  font-size: max(11.5px, 1em);
+.net-m,
+.req-why,
+.wallet {
+  font-size: 12px;
 }
