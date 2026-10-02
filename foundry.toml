@@ -12,6 +12,8 @@ optimizer = true
 optimizer_runs = 200
 
 [rpc_endpoints]
+arc = "https://rpc.mainnet.arc.io"
+arc_testnet = "https://rpc.testnet.arc.network"
 ethereum = "https://ethereum-rpc.publicnode.com"
 sepolia = "https://ethereum-sepolia-rpc.publicnode.com"
 base = "https://base-rpc.publicnode.com"

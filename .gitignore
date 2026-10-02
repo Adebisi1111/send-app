@@ -1,10 +1,21 @@
 node_modules
 dist
 .env
+.env.*
 *.key
+*.log
 out/
 cache/
 lib/
+
+# Local test harness. These hold well-known anvil dev keys and must never be
+# published or deployed.
 injected-wallet.mjs
 serve-local.mjs
 signer.mjs
+dev-signer.mjs
+fund.sh
+keys.txt
+
+# forge script artifacts (contain tx payloads)
+broadcast/

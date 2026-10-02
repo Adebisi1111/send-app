@@ -6,222 +6,296 @@ import {UsernameRegistry} from "./UsernameRegistry.sol";
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
 }
 
-/// @title PaymentRequest
-/// @notice Someone asks for USDC by username, stating what it is for. The
-///         payer funds the request up front, so the recipient can release it
-///         with a single click — no further approval needed, and no chasing.
+/// @title PaymentRequest — ask for USDC by username, get paid on accept.
+/// @notice A requester asks someone for USDC. Nothing is escrowed and no funds
+///         are ever locked: the payer sends their own USDC when they accept.
+///         A request is therefore free to leave and free to ignore, and there is
+///         no custody risk and no balance that can be stranded.
+/// @dev Two things this supports that per-to-per apps cannot:
 ///
-/// @dev Flow:
-///   1. Recipient calls `request{value: amount}(username, purpose, expiry)`,
-///      paying USDC in. The money is held by this contract, keyed to the request.
-///   2. Payer calls `release(id)` to send the funds to the recipient's address.
-///      Anyone may call `release` once `autoRelease` is set, which is what makes
-///      the "one click" work from a link or a QR code.
-///   3. Payer calls `cancel(id)` to take the money back before release.
-///
-/// The requester's USDC is escrowed in this contract, not in the username
-/// registry, so a compromised name cannot drain a balance.
+///        1. Open requests. A request may name nobody, in which case anyone
+///           holding the link can fulfil it. That turns "pay me back for
+///           dinner" into an open, shareable claim.
+///        2. Partial settlement. `pay` accepts any value up to the remaining
+///           amount, so several people can chip into one request. It closes
+///           only once the full amount has been collected.
 contract PaymentRequest {
-    /// @notice Lifecycle of a request.
     enum Status {
         None,
-        Pending,
-        Released,
-        Cancelled,
-        Refunded
+        Open,
+        Paid,
+        Cancelled
     }
 
-    /// @notice USDC has 6 decimals on Arc.
-    uint256 public constant USDC_DECIMALS = 6;
-
-    /// @notice Everything needed to show and settle a request.
     struct Request {
-        address requester;   // who asked for the money
-        address recipient;   // username owner, resolved at request time
-        string username;     // normalised, for display
-        string purpose;      // what the money is for
-        uint256 amount;      // 6dp USDC
-        uint64 expiresAt;    // unix seconds
+        uint256 id;
+        address requester; // who is owed
+        address named; // who was asked; address(0) means open to anyone
+        string username; // the name that was asked, or "" when open
+        string purpose;
+        uint256 amount; // total requested
+        uint256 collected; // settled so far
+        uint64 expiresAt;
         Status status;
-        bool autoRelease;    // allow anyone to trigger the send
     }
 
-    /// @notice USDC token, passed in at construction.
-    IERC20 public immutable usdc;
-
-    /// @notice Username -> address lookup, shared with the frontend.
-    UsernameRegistry public immutable registry;
-
-    uint256 private _nextId = 1;
-
-    /// @notice request id => request
-    mapping(uint256 => Request) private _requests;
-
-    /// @notice recipient address => ids they can release
-    mapping(address => uint256[]) private _inbox;
-    /// @notice requester address => ids they can cancel
-    mapping(address => uint256[]) private _outbox;
-    /// @notice request id => index in _inbox
-    mapping(uint256 => uint256) private _inboxIndex;
-    /// @notice request id => index in _outbox
-    mapping(uint256 => uint256) private _outboxIndex;
-
-    /// @notice Emitted when a request is funded and awaiting release.
-    event RequestCreated(
-        uint256 indexed id,
-        address indexed requester,
-        address indexed recipient,
-        string username,
-        string purpose,
-        uint256 amount,
-        uint64 expiresAt,
-        bool autoRelease
-    );
-    /// @notice Emitted when funds are sent to the recipient.
-    event Released(uint256 indexed id, address indexed to, uint256 amount);
-    /// @notice Emitted when the requester takes the money back.
-    event Cancelled(uint256 indexed id, address indexed to, uint256 amount);
-    /// @notice Emitted when an expired pending request is refunded.
-    event Refunded(uint256 indexed id, address indexed to, uint256 amount);
-
-    error RequestNotFound(uint256 id);
-    error InvalidStatus(uint256 id, Status current);
-    error NotRequester(uint256 id, address caller);
-    error ZeroAddress();
     error ZeroAmount();
     error PurposeTooLong();
     error ExpiryTooLong();
-    error UnknownUsername(string username);
+    error RequestNotFound(uint256 id);
+    error InvalidStatus(uint256 id, Status status);
+    error NotRequester(uint256 id, address caller);
+    error SelfRequest(address caller);
     error ExpiryPassed(uint256 id);
+    error UnknownUsername(string username);
+    error NothingToCollect(uint256 id, uint256 remaining);
+    error NothingOwed(uint256 id, uint256 collected);
     error TransferFailed();
 
-    constructor(address usdcToken, address registry_) {
-        if (usdcToken == address(0) || registry_ == address(0)) revert ZeroAddress();
-        usdc = IERC20(usdcToken);
-        registry = UsernameRegistry(registry_);
+    event RequestOpened(
+        uint256 indexed id,
+        address indexed requester,
+        address indexed named,
+        string username,
+        string purpose,
+        uint256 amount,
+        uint64 expiresAt
+    );
+    /// @notice Emitted on every settlement, partial ones included.
+    event Settled(
+        uint256 indexed id, address indexed payer, uint256 amount, uint256 collected, uint256 total
+    );
+    event RequestClosed(uint256 indexed id, address indexed requester, Status status);
+
+    IERC20 public immutable usdc;
+    UsernameRegistry public immutable usernames;
+
+    uint256 public nextId = 1;
+    uint256 public totalSettled;
+
+    mapping(uint256 => Request) private _requests;
+    /// @notice How much a given payer has put into a given request.
+    mapping(uint256 => mapping(address => uint256)) public paidBy;
+
+    /// 1-based position of each open unnamed request inside _openIds, so it can
+    /// be removed in O(1) when it settles.
+    mapping(uint256 => uint256) private _openPos;
+    uint256[] private _openIds;
+    uint256 public openUnnamedCount;
+
+    constructor(IERC20 usdc_, UsernameRegistry usernames_) {
+        usdc = usdc_;
+        usernames = usernames_;
     }
 
-    /// @notice Create a request for a specific amount. The caller must have
-    ///         approved this contract and the USDC is pulled in explicitly.
-    function requestFor(
-        string calldata username,
-        string calldata purpose,
+    // ------------------------------------------------------------ asking
+
+    /// @notice Ask a named person for USDC. They pay from their own wallet.
+    function ask(string calldata username, string calldata purpose, uint256 amount, uint256 expiry)
+        external
+        returns (uint256 id)
+    {
+        address to = usernames.resolve(username);
+        if (to == address(0)) revert UnknownUsername(username);
+        if (to == msg.sender) revert SelfRequest(msg.sender);
+        id = _open(msg.sender, to, username, purpose, amount, expiry);
+    }
+
+    /// @notice Leave a request open to anyone. No escrow, no counterparty.
+    function askAnyone(string calldata purpose, uint256 amount, uint256 expiry)
+        external
+        returns (uint256 id)
+    {
+        id = _open(msg.sender, address(0), "", purpose, amount, expiry);
+        _openIds.push(id);
+        _openPos[id] = _openIds.length;
+        openUnnamedCount = _openIds.length;
+    }
+
+    function _open(
+        address requester,
+        address named,
+        string memory username,
+        string memory purpose,
         uint256 amount,
-        uint256 expiry,
-        bool autoRelease
-    ) external returns (uint256 id) {
+        uint256 expiry
+    ) private returns (uint256 id) {
         if (amount == 0) revert ZeroAmount();
         if (bytes(purpose).length == 0 || bytes(purpose).length > 140) revert PurposeTooLong();
-        if (expiry <= block.timestamp || expiry > block.timestamp + 30 days) {
+        if (expiry <= block.timestamp || expiry > block.timestamp + 90 days) {
             revert ExpiryTooLong();
         }
 
-        address recipient = registry.resolve(username);
-        if (recipient == address(0)) revert UnknownUsername(username);
-
-        if (!usdc.transferFrom(msg.sender, address(this), amount)) revert TransferFailed();
-
-        id = _nextId++;
+        id = nextId++;
         _requests[id] = Request({
-            requester: msg.sender,
-            recipient: recipient,
-            username: registry.normalise(username),
+            id: id,
+            requester: requester,
+            named: named,
+            username: username,
             purpose: purpose,
             amount: amount,
+            collected: 0,
             expiresAt: uint64(expiry),
-            status: Status.Pending,
-            autoRelease: autoRelease
+            status: Status.Open
         });
 
-        _push(_inbox, _inboxIndex, recipient, id);
-        _push(_outbox, _outboxIndex, msg.sender, id);
-
-        emit RequestCreated(
-            id, msg.sender, recipient, _requests[id].username, purpose,
-            amount, uint64(expiry), autoRelease
-        );
+        emit RequestOpened(id, requester, named, username, purpose, amount, uint64(expiry));
     }
 
-    /// @notice Send the escrowed USDC to the recipient. One click.
-    /// @dev Callable by the recipient always, and by anyone when autoRelease is
-    ///      set — that is what lets a link or QR code trigger the payout.
-    function release(uint256 id) external {
-        if (id == 0 || id >= _nextId) revert RequestNotFound(id);
+    // ------------------------------------------------------------ paying
+
+    /// @notice Pay a request in full or in part. Anyone may call this — that is
+    ///         what makes an open request open, and it also lets several people
+    ///         chip into the same request.
+    function pay(uint256 id, uint256 amount) external {
+        _pay(id, amount);
+    }
+
+    function _pay(uint256 id, uint256 amount) private {
         Request storage r = _requests[id];
-        if (r.status != Status.Pending) revert InvalidStatus(id, r.status);
-        if (!r.autoRelease && msg.sender != r.recipient) revert NotRequester(id, msg.sender);
+        if (r.id == 0) revert RequestNotFound(id);
+        if (r.status != Status.Open) revert InvalidStatus(id, r.status);
         if (block.timestamp >= r.expiresAt) revert ExpiryPassed(id);
 
-        r.status = Status.Released;
-        if (!usdc.transfer(r.recipient, r.amount)) revert TransferFailed();
+        uint256 left = r.amount - r.collected;
+        if (amount == 0 || amount > left) revert NothingToCollect(id, left);
 
-        emit Released(id, r.recipient, r.amount);
+        r.collected += amount;
+        paidBy[id][msg.sender] += amount;
+        totalSettled += amount;
+
+        if (!usdc.transferFrom(msg.sender, r.requester, amount)) revert TransferFailed();
+
+        if (r.collected == r.amount) {
+            r.status = Status.Paid;
+            if (r.named == address(0)) _dropUnnamed(id);
+            emit RequestClosed(id, r.requester, Status.Paid);
+        }
+
+        emit Settled(id, msg.sender, amount, r.collected, r.amount);
     }
 
-    /// @notice Take the money back. Only the requester, only while pending.
-    function cancel(uint256 id) external {
-        if (id == 0 || id >= _nextId) revert RequestNotFound(id);
+    /// @notice Pay whatever is left on a request.
+    function payRemaining(uint256 id) external returns (uint256 paid) {
         Request storage r = _requests[id];
-        if (r.status != Status.Pending) revert InvalidStatus(id, r.status);
+        paid = r.amount - r.collected;
+        _pay(id, paid);
+    }
+
+    // ------------------------------------------------------------ closing
+
+    /// @notice Close a request nobody has paid. Only the asker, and only while
+    ///         nothing has been collected.
+    function cancel(uint256 id) external {
+        Request storage r = _requests[id];
+        if (r.id == 0) revert RequestNotFound(id);
+        if (r.status != Status.Open) revert InvalidStatus(id, r.status);
         if (msg.sender != r.requester) revert NotRequester(id, msg.sender);
+        if (r.collected != 0) revert NothingOwed(id, r.collected);
 
         r.status = Status.Cancelled;
-        if (!usdc.transfer(msg.sender, r.amount)) revert TransferFailed();
-
-        emit Cancelled(id, msg.sender, r.amount);
+        if (r.named == address(0)) _dropUnnamed(id);
+        emit RequestClosed(id, r.requester, Status.Cancelled);
     }
 
-    /// @notice Refund a request that was never released and has expired, so
-    ///         escrowed funds cannot sit here forever.
-    function refundExpired(uint256 id) external {
-        if (id == 0 || id >= _nextId) revert RequestNotFound(id);
+    /// @notice Close a request that has been partly paid.
+    function close(uint256 id) external {
         Request storage r = _requests[id];
-        if (r.status != Status.Pending) revert InvalidStatus(id, r.status);
-        if (block.timestamp < r.expiresAt) revert ExpiryPassed(id);
+        if (r.id == 0) revert RequestNotFound(id);
+        if (r.status != Status.Open) revert InvalidStatus(id, r.status);
+        if (msg.sender != r.requester && msg.sender != r.named) revert NotRequester(id, msg.sender);
+        if (r.collected == 0) revert NothingOwed(id, 0);
 
-        r.status = Status.Refunded;
-        if (!usdc.transfer(r.requester, r.amount)) revert TransferFailed();
-
-        emit Refunded(id, r.requester, r.amount);
+        r.status = Status.Paid;
+        if (r.named == address(0)) _dropUnnamed(id);
+        emit RequestClosed(id, r.requester, Status.Paid);
     }
 
-    /// @notice Full record for a request.
+    function _dropUnnamed(uint256 id) private {
+        uint256 pos = _openPos[id];
+        if (pos == 0) return;
+        uint256 last = _openIds[_openIds.length - 1];
+        _openIds[pos - 1] = last;
+        _openPos[last] = pos;
+        _openIds.pop();
+        delete _openPos[id];
+        openUnnamedCount = _openIds.length;
+    }
+
+    // ------------------------------------------------------------ reading
+
     function getRequest(uint256 id) external view returns (Request memory) {
-        if (id == 0 || id >= _nextId) revert RequestNotFound(id);
         return _requests[id];
     }
 
-    /// @notice Request ids where this address is the recipient.
-    function inbox(address account) external view returns (uint256[] memory) {
-        return _inbox[account];
+    /// @notice How much is still needed to settle a request.
+    function remaining(uint256 id) external view returns (uint256) {
+        Request storage r = _requests[id];
+        return r.amount - r.collected;
     }
 
-    /// @notice Request ids where this address is the requester.
-    function outbox(address account) external view returns (uint256[] memory) {
-        return _outbox[account];
+    /// @notice True once the request has been fully settled.
+    function isSettled(uint256 id) external view returns (bool) {
+        Request storage r = _requests[id];
+        return r.collected == r.amount;
     }
 
-    /// @notice USDC currently held across all pending requests.
-    function outstanding() external view returns (uint256) {
-        return _totalOutstanding();
+    function statusOf(uint256 id) external view returns (Status) {
+        return _requests[id].status;
     }
 
-    function _totalOutstanding() private view returns (uint256 total) {
-        for (uint256 i = 1; i < _nextId; i++) {
-            if (_requests[i].status == Status.Pending) total += _requests[i].amount;
+    /// @notice Requests addressed to a specific account.
+    function askedOf(address account) external view returns (uint256[] memory ids) {
+        uint256 total = nextId - 1;
+        ids = new uint256[](total);
+        uint256 n;
+        for (uint256 i = 1; i <= total; i++) {
+            if (_requests[i].named == account) ids[n++] = i;
+        }
+        assembly {
+            mstore(ids, n)
         }
     }
 
-    function _push(
-        mapping(address => uint256[]) storage list,
-        mapping(uint256 => uint256) storage index,
-        address account,
-        uint256 id
-    ) private {
-        list[account].push(id);
-        index[id] = list[account].length - 1;
+    /// @notice Requests an account opened.
+    function openedBy(address account) external view returns (uint256[] memory ids) {
+        uint256 total = nextId - 1;
+        ids = new uint256[](total);
+        uint256 n;
+        for (uint256 i = 1; i <= total; i++) {
+            if (_requests[i].requester == account) ids[n++] = i;
+        }
+        assembly {
+            mstore(ids, n)
+        }
+    }
+
+    /// @notice Open requests that named nobody — the public feed.
+    function openRequests(uint256 limit) external view returns (uint256[] memory ids) {
+        uint256 cap = openUnnamedCount < limit ? openUnnamedCount : limit;
+        ids = new uint256[](cap);
+        for (uint256 i = 0; i < cap; i++) {
+            ids[i] = _openIds[i];
+        }
+    }
+
+    /// @notice Everything an account can act on, newest first: requests made to
+    ///         it, requests it opened, and open requests anyone may fulfil.
+    function feedOf(address account, uint256 limit) external view returns (uint256[] memory ids) {
+        uint256 total = nextId - 1;
+        uint256 cap = total < limit ? total : limit;
+        ids = new uint256[](cap);
+        uint256 n;
+        for (uint256 i = total; i > 0 && n < cap; i--) {
+            Request storage r = _requests[i];
+            if (r.requester == account || r.named == account || r.named == address(0)) {
+                ids[n++] = i;
+            }
+        }
+        assembly {
+            mstore(ids, n)
+        }
     }
 }
