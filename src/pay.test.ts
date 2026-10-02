@@ -88,3 +88,16 @@ describe('expiry', () => {
     expect(14 * DAY).toBeLessThan(90 * DAY);
   });
 });
+describe('Declined status', () => {
+  it('is the fifth enum value', () => {
+    expect(STATUS[4]).toBe('Declined');
+  });
+
+  it('is not open, so no pay or decline controls show', () => {
+    expect(isOpen(request({ status: 4 }))).toBe(false);
+  });
+
+  it('an open request is still open', () => {
+    expect(isOpen(request({ status: 1 }))).toBe(true);
+  });
+});

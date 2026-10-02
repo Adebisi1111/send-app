@@ -12,7 +12,7 @@ export const IS_LOCAL = RPC_URL.includes('127.0.0.1');
 
 export const USDC = (import.meta.env.VITE_USDC ?? '0x3600000000000000000000000000000000000000') as `0x${string}`;
 export const REGISTRY = (import.meta.env.VITE_REGISTRY ?? '0x71508725F355cf017B42Bccd878cff3c8a0bE641') as `0x${string}`;
-export const REQUESTS = (import.meta.env.VITE_REQUESTS ?? '0x5fdd3cec76f356d707bfe6fb01029f431f5efca5') as `0x${string}`;
+export const REQUESTS = (import.meta.env.VITE_REQUESTS ?? '0xe71c9a722605ff6541d659a685f968349624e075') as `0x${string}`;
 
 const REGISTRY_ABI_SIG = [
   'function register(string) returns (string)',
@@ -30,6 +30,8 @@ const REQUEST_ABI_SIG = [
   'function pay(uint256,uint256)',
   'function payRemaining(uint256) returns (uint256)',
   'function cancel(uint256)',
+  'function decline(uint256)',
+  'function canRespond(uint256,address) view returns (bool)',
   'function close(uint256)',
   'function remaining(uint256) view returns (uint256)',
   'function isSettled(uint256) view returns (bool)',
@@ -56,8 +58,8 @@ const ERC20_ABI_SIG = [
 export const REQUEST_ABI = parseAbi(REQUEST_ABI_SIG);
 export const ERC20_ABI = parseAbi(ERC20_ABI_SIG);
 
-/// Open=1, Paid=2, Cancelled=3
-export const STATUS = ['None', 'Open', 'Paid', 'Cancelled'] as const;
+/// Open=1, Paid=2, Cancelled=3, Declined=4
+export const STATUS = ['None', 'Open', 'Paid', 'Cancelled', 'Declined'] as const;
 export type Status = (typeof STATUS)[number];
 
 export interface Request {

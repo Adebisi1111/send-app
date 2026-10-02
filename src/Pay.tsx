@@ -121,7 +121,8 @@ export default function Pay() {
 
   const [toPay, setToPay] = useState<Request[]>([]);
   const [openFeed, setOpenFeed] = useState<Request[]>([]);
-  const [mine, setMine] = useState<Request[]>([]);
+  /** Everything the connected account has touched, in either direction. */
+  const [history, setHistory] = useState<Request[]>([]);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [contractMissing, setContractMissing] = useState(false);
@@ -256,8 +257,18 @@ export default function Pay() {
         return ao !== bo ? ao - bo : Number(b.id - a.id);
       };
       setToPay(tp.filter(isOpen).sort(byNeed));
-      setMine(mn.sort(byNeed));
       setOpenFeed(op.filter(isOpen).sort(byNeed));
+      // One list for the whole account: everything asked of me, everything I
+      // asked, and anything I have already paid, newest first.
+      const seen = new Set<string>();
+      const all: Request[] = [];
+      for (const r of [...tp, ...mn, ...op]) {
+        const k = r.id.toString();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        all.push(r);
+      }
+      setHistory(all.sort((a, b) => Number(b.id - a.id)));
     } catch {
       /* transient RPC failure — retried on the next tick */
     }
@@ -444,6 +455,15 @@ export default function Pay() {
       return `Sent ${fmtUsdc(units)} USDC to @${handle}`;
     });
 
+  const refuse = (r: Request) =>
+    run('Declining…', async () => {
+      const h = await writeContractAsync({
+        address: REQUESTS, abi: REQUEST_ABI, functionName: 'decline', args: [r.id],
+      });
+      await waitForTransactionReceipt(client, { hash: h });
+      return `Declined request #${r.id} — nothing was sent`;
+    });
+
   const cancelRequest = (r: Request) =>
     run('Closing…', async () => {
       const h = await writeContractAsync({
@@ -626,6 +646,11 @@ export default function Pay() {
                   <button onClick={() => settle(r, true)} disabled={!!busy} className="btn">
                     {busy ?? `Pay ${fmtUsdc(left)} USDC`}
                   </button>
+                  {r.named === address && (
+                    <button onClick={() => refuse(r)} disabled={!!busy} className="btn btn-ghost">
+                      Decline
+                    </button>
+                  )}
                 </div>
                 <details className="req-part">
                   <summary>Pay part of it</summary>
@@ -741,7 +766,7 @@ export default function Pay() {
           ['ask', 'Request'],
           ['topay', 'To Pay'],
           ['open', 'Open'],
-          ['mine', 'Mine'],
+          ['mine', 'History'],
         ] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`tab${tab === k ? ' tab-on' : ''}`}
             onClick={() => setTab(k)}>
@@ -849,13 +874,13 @@ export default function Pay() {
 
       {tab === 'mine' && (
         <div className="stack">
-          {mine.length === 0 && (
+          {history.length === 0 && (
             <div className="card empty">
               <div className="empty-mark">◎</div>
-              {busy ?? 'You have not asked anyone for USDC yet.'}
+              {busy ?? 'Nothing here yet. Send someone USDC, or ask them for some.'}
             </div>
           )}
-          {mine.map((r) => renderRequest(r, 'mine'))}
+          {history.map((r) => renderRequest(r, r.requester === address ? 'mine' : 'pay'))}
         </div>
       )}
 

@@ -26,7 +26,8 @@ contract PaymentRequest {
         None,
         Open,
         Paid,
-        Cancelled
+        Cancelled,
+        Declined
     }
 
     struct Request {
@@ -53,6 +54,8 @@ contract PaymentRequest {
     error NothingToCollect(uint256 id, uint256 remaining);
     error NothingOwed(uint256 id, uint256 collected);
     error TransferFailed();
+    error NotNamedPayer(uint256 id, address caller);
+    error AlreadyResponded(uint256 id);
 
     event RequestOpened(
         uint256 indexed id,
@@ -68,6 +71,8 @@ contract PaymentRequest {
         uint256 indexed id, address indexed payer, uint256 amount, uint256 collected, uint256 total
     );
     event RequestClosed(uint256 indexed id, address indexed requester, Status status);
+    /// @notice Emitted when the named payer turns a request down. No money moves.
+    event RequestDeclined(uint256 indexed id, address indexed named);
 
     IERC20 public immutable usdc;
     UsernameRegistry public immutable usernames;
@@ -78,6 +83,9 @@ contract PaymentRequest {
     mapping(uint256 => Request) private _requests;
     /// @notice How much a given payer has put into a given request.
     mapping(uint256 => mapping(address => uint256)) public paidBy;
+    /// @notice True once the named payer has accepted or declined. A decline is
+    ///         final: the same payer cannot later accept.
+    mapping(uint256 => mapping(address => bool)) public responded;
 
     /// 1-based position of each open unnamed request inside _openIds, so it can
     /// be removed in O(1) when it settles.
@@ -158,12 +166,14 @@ contract PaymentRequest {
         if (r.id == 0) revert RequestNotFound(id);
         if (r.status != Status.Open) revert InvalidStatus(id, r.status);
         if (block.timestamp >= r.expiresAt) revert ExpiryPassed(id);
+        if (responded[id][msg.sender]) revert AlreadyResponded(id);
 
         uint256 left = r.amount - r.collected;
         if (amount == 0 || amount > left) revert NothingToCollect(id, left);
 
         r.collected += amount;
         paidBy[id][msg.sender] += amount;
+        responded[id][msg.sender] = true;
         totalSettled += amount;
 
         if (!usdc.transferFrom(msg.sender, r.requester, amount)) revert TransferFailed();
@@ -182,6 +192,23 @@ contract PaymentRequest {
         Request storage r = _requests[id];
         paid = r.amount - r.collected;
         _pay(id, paid);
+    }
+
+    /// @notice Turn a request down. Only the named payer may do this, and only
+    ///         while nothing has been collected. A decline is final: it closes
+    ///         the request, and `responded` stops the same payer from
+    ///         reversing it later. No money moves, because nothing was held.
+    function decline(uint256 id) external {
+        Request storage r = _requests[id];
+        if (r.id == 0) revert RequestNotFound(id);
+        if (r.status != Status.Open) revert InvalidStatus(id, r.status);
+        if (r.named == address(0)) revert NotNamedPayer(id, msg.sender);
+        if (msg.sender != r.named) revert NotNamedPayer(id, msg.sender);
+        if (r.collected > 0) revert NothingToCollect(id, r.amount - r.collected);
+
+        responded[id][msg.sender] = true;
+        r.status = Status.Declined;
+        emit RequestDeclined(id, msg.sender);
     }
 
     // ------------------------------------------------------------ closing
@@ -234,6 +261,17 @@ contract PaymentRequest {
     function remaining(uint256 id) external view returns (uint256) {
         Request storage r = _requests[id];
         return r.amount - r.collected;
+    }
+
+    /// @notice Whether `account` may accept a request: it is still open, it has
+    ///         not expired, and this account has not already responded to it.
+    function canRespond(uint256 id, address account) external view returns (bool) {
+        Request storage r = _requests[id];
+        if (r.id == 0 || r.status != Status.Open) return false;
+        if (block.timestamp >= r.expiresAt) return false;
+        if (responded[id][account]) return false;
+        if (r.named != address(0) && r.named != account) return false;
+        return true;
     }
 
     /// @notice True once the request has been fully settled.

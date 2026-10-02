@@ -19,27 +19,27 @@ const art = JSON.parse(readFileSync('./contracts/out/PaymentRequest.sol/PaymentR
 let bytecode = art.bytecode.object ?? art.bytecode;
 if (!bytecode.startsWith('0x')) bytecode = '0x' + bytecode;
 
-// constructor(address usdc, address usernames)
-const ctorAbi = parseAbi(['constructor(address usdc, address usernames)']);
-
 const pub = createPublicClient({ chain: arc, transport: http(RPC) });
 const wallet = createWalletClient({ account: acct, chain: arc, transport: http(RPC) });
 
-const hash = await wallet.deployContract({ abi: ctorAbi, bytecode, args: [USDC, REG] });
+const hash = await wallet.deployContract({
+  abi: parseAbi(['constructor(address usdc, address usernames)']),
+  bytecode, args: [USDC, REG],
+});
 const rec = await pub.waitForTransactionReceipt({ hash });
 const addr = rec.contractAddress;
-
-console.log('deployed :', addr);
-console.log('gas used :', rec.gasUsed.toString());
-console.log('status   :', rec.status);
+console.log('deployed :', addr, '| gas', rec.gasUsed, '| status', rec.status);
 
 const c = getContract({
   address: addr, client: pub,
-  abi: parseAbi(['function usdc() view returns (address)', 'function usernames() view returns (address)']),
+  abi: parseAbi([
+    'function usdc() view returns (address)',
+    'function usernames() view returns (address)',
+    'function nextId() view returns (uint256)',
+  ]),
 });
-const u = (await c.read.usdc()).toLowerCase();
-const r = (await c.read.usernames()).toLowerCase();
-console.log('usdc()      :', u);
-console.log('usernames() :', r);
-console.log('USDC MATCH  :', u === USDC.toLowerCase());
-console.log('REG MATCH   :', r === REG.toLowerCase());
+console.log('USDC MATCH :', (await c.read.usdc()).toLowerCase() === USDC.toLowerCase());
+console.log('REG MATCH  :', (await c.read.usernames()).toLowerCase() === REG.toLowerCase());
+console.log('nextId     :', await c.read.nextId());
+console.log('has decline:', art.abi.some((f) => f.name === 'decline'));
+console.log('has canRespond:', art.abi.some((f) => f.name === 'canRespond'));

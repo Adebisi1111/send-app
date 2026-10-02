@@ -377,4 +377,121 @@ contract PaymentRequestTest is Test {
 
         assertEq(requests.totalSettled(), 25e6, "total settled");
     }
+
+    // ------------------------------------------------------ decline
+
+    function test_NamedPayerCanDecline() public {
+        vm.prank(alice);
+        uint256 id = requests.ask("bob", "dinner", 30e6, block.timestamp + DAY);
+
+        uint256 aliceBefore = usdc.balanceOf(alice);
+
+        vm.prank(bob);
+        requests.decline(id);
+
+        assertEq(uint8(requests.statusOf(id)), uint8(PaymentRequest.Status.Declined), "declined");
+        assertEq(usdc.balanceOf(alice), aliceBefore, "no money moved on decline");
+        assertTrue(requests.responded(id, bob), "bob recorded as having responded");
+    }
+
+    function test_DeclinerCannotLaterPay() public {
+        vm.prank(alice);
+        uint256 id = requests.ask("bob", "dinner", 30e6, block.timestamp + DAY);
+
+        vm.prank(bob);
+        requests.decline(id);
+
+        // decline already closed it, so the status guard fires first; either
+        // way the payment cannot happen.
+        vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(PaymentRequest.InvalidStatus.selector, id, PaymentRequest.Status.Declined)
+        );
+        requests.pay(id, 30e6);
+
+        assertEq(usdc.balanceOf(alice), 1_000e6, "alice still holds everything");
+    }
+
+    function test_StrangerCannotDecline() public {
+        vm.prank(alice);
+        uint256 id = requests.ask("bob", "dinner", 30e6, block.timestamp + DAY);
+
+        vm.prank(carol);
+        vm.expectRevert(abi.encodeWithSelector(PaymentRequest.NotNamedPayer.selector, id, carol));
+        requests.decline(id);
+
+        assertEq(uint8(requests.statusOf(id)), uint8(PaymentRequest.Status.Open), "still open");
+    }
+
+    function test_RequesterCannotDeclineOwnRequest() public {
+        vm.prank(alice);
+        uint256 id = requests.ask("bob", "dinner", 30e6, block.timestamp + DAY);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(PaymentRequest.NotNamedPayer.selector, id, alice));
+        requests.decline(id);
+    }
+
+    function test_CannotDeclineOpenRequest() public {
+        vm.prank(alice);
+        uint256 id = requests.askAnyone("group gift", 50e6, block.timestamp + DAY);
+
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(PaymentRequest.NotNamedPayer.selector, id, bob));
+        requests.decline(id);
+    }
+
+    function test_CannotDeclineAfterPartialPayment() public {
+        vm.prank(alice);
+        uint256 id = requests.ask("bob", "dinner", 30e6, block.timestamp + DAY);
+
+        vm.prank(bob);
+        requests.pay(id, 10e6);
+
+        vm.prank(bob);
+        vm.expectRevert();
+        requests.decline(id);
+    }
+
+    function test_DecreaseIsFinalEvenForPartialOpenRequest() public {
+        vm.prank(alice);
+        uint256 id = requests.askAnyone("group gift", 50e6, block.timestamp + DAY);
+
+        vm.prank(carol);
+        requests.pay(id, 20e6);
+
+        // carol already responded by paying; she cannot decline afterwards
+        vm.prank(carol);
+        vm.expectRevert();
+        requests.decline(id);
+    }
+
+    // ------------------------------------------------------ canRespond
+
+    function test_CanRespondTrueForNamedPayer() public {
+        vm.prank(alice);
+        uint256 id = requests.ask("bob", "dinner", 30e6, block.timestamp + DAY);
+
+        assertTrue(requests.canRespond(id, bob), "bob may respond");
+        assertFalse(requests.canRespond(id, carol), "carol may not");
+    }
+
+    function test_CanRespondFalseAfterDecline() public {
+        vm.prank(alice);
+        uint256 id = requests.ask("bob", "dinner", 30e6, block.timestamp + DAY);
+
+        vm.prank(bob);
+        requests.decline(id);
+
+        assertFalse(requests.canRespond(id, bob), "declined payer may not respond");
+    }
+
+    function test_CanRespondFalseAfterExpiry() public {
+        vm.prank(alice);
+        uint256 id = requests.ask("bob", "dinner", 30e6, block.timestamp + DAY);
+
+        vm.warp(block.timestamp + DAY + 1);
+
+        assertFalse(requests.canRespond(id, bob), "expired");
+    }
 }
