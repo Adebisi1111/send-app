@@ -25,3 +25,4 @@ broadcast/
 .deploy_data.txt
 deploy-now.mjs
 deploy-fork.mjs
+.commitmsg.txt
