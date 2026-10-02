@@ -6,7 +6,7 @@ import { arc } from './chain';
 import {
   USDC, REGISTRY, REQUESTS, REGISTRY_ABI, REQUEST_ABI, ERC20_ABI,
   STATUS, fmtUsdc, short, DAY, ZERO,
-  isOpen, isOpenRequest, remaining, mergeActionable, directionOf, RPC_URL,
+  isOpen, isOpenRequest, remaining, mergeActionable, directionOf, explain, RPC_URL,
   type Request,
 } from './pay';
 
@@ -384,8 +384,7 @@ export default function Pay() {
       await Promise.all([refresh(), loadAll()]);
       return true;
     } catch (e: unknown) {
-      const m = e as { shortMessage?: string; message?: string };
-      setErr(m?.shortMessage ?? m?.message ?? 'Something went wrong');
+      setErr(explain(e));
       return false;
     } finally {
       setBusy(null);

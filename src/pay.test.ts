@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   usdc, fmtUsdc, short, STATUS, DAY, ZERO,
-  isOpen, isOpenRequest, remaining, mergeActionable, directionOf,
+  isOpen, isOpenRequest, remaining, mergeActionable, directionOf, explain,
   type Request,
 } from './pay';
 
@@ -157,5 +157,42 @@ describe('which side of a request you are on', () => {
     const theirs = request({ id: 2n, requester: OTHER });
     const pending = mergeActionable([mine, theirs], []).filter((r) => directionOf(r, ME) !== 'asking');
     expect(pending.map((r) => r.id)).toEqual([2n]);
+  });
+});
+
+describe('turning wallet errors into something actionable', () => {
+  const err = (shortMessage?: string, message?: string) => ({ shortMessage, message });
+
+  it('explains a bare HTTP failure rather than passing it through', () => {
+    const out = explain(err('Http request failed'));
+    expect(out).toContain('Arc');
+    expect(out).toContain('5042');
+  });
+
+  it('recognises the fetch variants wallets use for the same thing', () => {
+    for (const m of ['Http request failed', 'fetch failed', 'NetworkError', 'Failed to fetch']) {
+      expect(explain(err(m))).toContain('wallet could not reach Arc');
+    }
+  });
+
+  it('says the user cancelled when they rejected the signature', () => {
+    expect(explain(err('User rejected the request'))).toContain('cancelled');
+  });
+
+  it('explains that Arc charges gas in USDC', () => {
+    expect(explain(err('insufficient funds for gas'))).toContain('USDC for gas');
+  });
+
+  it('names the already-taken case', () => {
+    expect(explain(err('Username already taken'))).toContain('already taken');
+  });
+
+  it('never swallows a real revert reason', () => {
+    expect(explain(err('ERC20: transfer amount exceeds balance')))
+      .toBe('ERC20: transfer amount exceeds balance');
+  });
+
+  it('falls back when there is no message at all', () => {
+    expect(explain({})).toContain('Try again');
   });
 });

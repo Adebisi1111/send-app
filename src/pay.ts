@@ -88,6 +88,39 @@ export const fmtUsdc = (v: bigint): string =>
 
 export const short = (a: string): string => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
+/**
+ * viem and several wallets both surface a bare "Http request failed" for what
+ * are several different problems. Those are the common ones and what to do
+ * about them; anything else is passed through untouched so a real revert reason
+ * is never swallowed.
+ */
+export const explain = (e: unknown): string => {
+  const m = e as { shortMessage?: string; message?: string; name?: string } | null;
+  const raw = m?.shortMessage ?? m?.message ?? '';
+  const s = String(raw);
+
+  if (/http request failed|fetch failed|network ?error|failed to fetch/i.test(s)) {
+    return 'Your wallet could not reach Arc. Check your internet, then confirm the wallet is on Arc mainnet (chain 5042).';
+  }
+  if (/user (rejected|denied)|rejected the request/i.test(s)) {
+    return 'You cancelled that in your wallet.';
+  }
+  // Anchored on the gas wording on purpose: a bare "insufficient funds" is
+  // also what an ERC-20 balance error looks like, and that one must survive
+  // with its own reason intact.
+  if (/insufficient funds for (gas|gas \* price)|gas required|intrinsic gas too low/i.test(s)) {
+    return 'Not enough USDC in this wallet to cover the fee. Arc uses USDC for gas, so the wallet needs a small balance first.';
+  }
+  if (/already taken|already registered|taken/i.test(s)) {
+    return 'That username is already taken. Try another.';
+  }
+  if (/unauthorized|not authorised|not authorized|signature/i.test(s)) {
+    return 'Your wallet refused to sign. Open the wallet and approve the transaction.';
+  }
+  if (!s) return 'Something went wrong. Try again.';
+  return s;
+};
+
 export const DAY = 86_400;
 
 /** How much is still needed to settle this request. */
