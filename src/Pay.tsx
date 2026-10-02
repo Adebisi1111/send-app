@@ -150,10 +150,33 @@ export default function Pay() {
   /** Seconds left before the success line clears itself. */
   const [noteLeft, setNoteLeft] = useState(0);
   const noteTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [alert, setAlert] = useState<{ title: string; body: string } | null>(null);
-  const [wantNotify, setWantNotify] = useState(
-    () => typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default',
-  );
+  // A single slot meant a second alert overwrote the first with no trace, which
+  // reads as "no notification". Queue them and show one at a time.
+  const [alerts, setAlerts] = useState<{ title: string; body: string }[]>([]);
+  const alert = alerts[0] ?? null;
+  const setAlert = (a: { title: string; body: string }) => setAlerts((q) => [...q, a].slice(-5));
+
+  // Advance the queue on a timer so a toast retires on its own and the next one
+  // is shown, instead of every alert stacking up until dismissed by hand.
+  useEffect(() => {
+    if (!alerts.length) return;
+    const id = setTimeout(() => setAlerts((q) => q.slice(1)), 6_000);
+    return () => clearTimeout(id);
+  }, [alerts]);
+  // Once permission is denied the browser refuses to prompt again, so the card
+  // used to disappear for good and the user had no way back. Keep it available
+  // and tell them plainly that the fix lives in browser settings.
+  const canNotify = typeof window !== 'undefined' && 'Notification' in window;
+  const perm = canNotify ? Notification.permission : 'unsupported';
+  const [notifyPrompt, setNotifyPrompt] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState('');
+  const canAsk = perm === 'default';
+  const notifyHelp =
+    perm === 'denied'
+      ? 'Notifications are blocked for this site. Your browser will not ask again, so enable them in site settings.'
+      : perm === 'unsupported'
+        ? 'This browser does not support notifications. In-app alerts still work.'
+        : 'Allow notifications so a payment reaches you without opening this app.';
 
   // chain handling
   const wagmiChainId = useChainId();
@@ -409,6 +432,7 @@ export default function Pay() {
 
   useEffect(() => {
     if (step !== 'ready') return;
+    if (perm === 'denied') setNotifyPrompt(true);
     void poll().then(() => { seen.current.clear(); });
     void loadDirect();
     const t = setInterval(() => {
@@ -416,10 +440,18 @@ export default function Pay() {
       void poll();
       void pollTransfers();
     }, 12_000);
-    const onVis = () => { if (document.visibilityState === 'visible') void poll(); };
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      void poll();
+      // A transfer landing while the tab was hidden must still be announced
+      // on return. Without this the pending poll catches it up only because the
+      // seen-set is shared, but nothing raises it if the tab is never re-focused
+      // through the interval path.
+      void pollTransfers();
+    };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
-  }, [step, poll, pollTransfers, loadDirect]);
+  }, [step, poll, pollTransfers, loadDirect, perm]);
 
   // A shared request link opens the To Pay tab.
   useEffect(() => {
@@ -896,16 +928,26 @@ export default function Pay() {
         </div>
       )}
 
-      {wantNotify && (
+      {notifyPrompt && (
         <div className="card notify-card">
           <div>
             <div className="card-h sm">Get notified</div>
-            <p className="card-p sm">Allow notifications so a payment reaches you without opening this app.</p>
+            <p className="card-p sm">{notifyHelp}</p>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={async () => {
-            await Notification.requestPermission();
-            setWantNotify(false);
-          }}>Allow</button>
+            if (Notification.permission === 'denied') {
+              // A denied permission cannot be re-requested from script; the
+              // browser will not prompt again. Say so instead of silently
+              // doing nothing, which reads as a broken button.
+              setNotifyMsg('Blocked. Re-enable notifications for this site in your browser settings, then reload.');
+              setNotifyPrompt(false);
+              return;
+            }
+            const res = await Notification.requestPermission();
+            setNotifyMsg(res === 'granted' ? '' : 'Still blocked in your browser settings.');
+            setNotifyPrompt(false);
+          }}>{canAsk ? 'Allow' : 'How to enable'}</button>
+          {notifyMsg && <div className="hint" style={{ marginTop: 4 }}>{notifyMsg}</div>}
         </div>
       )}
 
@@ -916,7 +958,7 @@ export default function Pay() {
             <div className="toast-t">{alert.title}</div>
             <div className="toast-m">{alert.body}</div>
           </div>
-          <button className="toast-x" onClick={() => setAlert(null)} aria-label="Dismiss">×</button>
+          <button className="toast-x" onClick={() => setAlerts((q) => q.slice(1))} aria-label="Dismiss">×</button>
         </div>
       )}
 

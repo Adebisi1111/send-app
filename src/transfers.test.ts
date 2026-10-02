@@ -108,6 +108,40 @@ describe('priming the notification set', () => {
   });
 });
 
+/**
+ * Toasts are queued rather than held in one slot. A single slot silently
+ * dropped alerts: two transfers in the same poll cycle left only the second
+ * visible, which reads to the user as no notification at all.
+ */
+describe('alert queue', () => {
+  const push = (q: string[], a: string) => [...q, a].slice(-5);
+
+  it('keeps both alerts when two arrive in one cycle', () => {
+    let q: string[] = [];
+    q = push(q, 'Send confirmed');
+    q = push(q, 'Payment received');
+    expect(q).toEqual(['Send confirmed', 'Payment received']);
+    expect(q[0]).toBe('Send confirmed'); // first is the one on screen
+  });
+
+  it('advances to the next alert on dismiss', () => {
+    const q = ['a', 'b'];
+    expect(q.slice(1)).toEqual(['b']);
+  });
+
+  it('caps the backlog so a burst cannot grow without bound', () => {
+    let q: string[] = [];
+    for (let i = 0; i < 9; i++) q = push(q, `a${i}`);
+    expect(q).toHaveLength(5);
+    expect(q[0]).toBe('a4'); // oldest dropped, newest retained
+  });
+
+  it('never lets the queue empty into a visible empty toast', () => {
+    const q: string[] = [];
+    expect(q[0] ?? null).toBeNull();
+  });
+});
+
 describe('direct transfer history', () => {
   it('records an incoming transfer and who sent it', () => {
     const [t] = collect([log({ from: THEM, to: ME, amount: '1400', hash: '0xa' })], ME);

@@ -63,10 +63,29 @@ Request takes a username, an amount and a purpose. Asking costs about half a
 cent and locks nothing — the balance does not move, because no escrow exists.
 
 Pending lists what you might pay or decline. A request naming you shows **Pay**
-and **Decline**. Notifications: the app polls every 12 seconds while visible and announces both
+and **Decline**. ### Arc's mirror emitter
+
+Every USDC transfer is logged twice: once by USDC at
+`0x3600000000000000000000000000000000000000` with **6-decimal** amounts, and once
+by `0xfffffffffffffffffffffffffffffffffffffffe` with **18-decimal** amounts. That
+second address holds no code, answers no ERC-20 call, and is not a token, but the
+explorer still renders a token page for it showing balances a million times too
+large — the same 0.0014 USDC transfer appears there as 1,400,000,000 USDC.
+
+Read the USDC contract, not the mirror. The app filters the mirror out by
+emitter address and keys history on transaction hash so nothing is duplicated.
+
+### Notifications
+
+The app polls every 12 seconds while visible and announces both
 a request somebody owes you and a transfer that landed in either direction. The
 first load primes the seen-set from what already happened, so opening the app
-does not replay old transfers as a burst of alerts. Transfers are re-read when
+does not replay old transfers as a burst of alerts. Toasts are queued and retire
+after six seconds, so two transfers in one cycle both surface.
+
+Returning to the tab re-reads transfers, not just requests. If notification
+permission is blocked, the card stays and says so: a denied permission cannot be
+re-requested from script, so the fix is in browser settings. Transfers are re-read when
 History is opened rather than on every tick, because walking thousands of blocks
 of logs against a rate-limited node would otherwise starve the poll.
 
@@ -98,11 +117,11 @@ transactions and reading the resulting chain state:
   reverted and the name still resolved to its real owner, while a transfer to a
   name-less address in the same block succeeded
 
-`125` contract tests and `51` frontend tests:
+`125` contract tests and `55` frontend tests:
 
 ```bash
 forge test        # 125 passing
-npx vitest run    # 51 passing
+npx vitest run    # 55 passing
 ```
 
 The contract suite covers what is easy to get wrong: that asking escrows
