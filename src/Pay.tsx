@@ -86,6 +86,12 @@ async function loadMany(ids: bigint[]): Promise<Request[]> {
 
 // ---------------------------------------------------------------- app
 
+/**
+ * How long a confirmed action stays on screen. Long enough to read a hash-free
+ * summary, short enough that it never looks like something still pending.
+ */
+const NOTE_MS = 6000;
+
 export default function Pay() {
   const { address } = useAccount();
   // wagmi can report isConnected before accounts resolve, which would skip
@@ -139,6 +145,9 @@ export default function Pay() {
   const [contractMissing, setContractMissing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /** Seconds left before the success line clears itself. */
+  const [noteLeft, setNoteLeft] = useState(0);
+  const noteTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [alert, setAlert] = useState<{ title: string; body: string } | null>(null);
   const [wantNotify, setWantNotify] = useState(
     () => typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default',
@@ -334,10 +343,44 @@ export default function Pay() {
     }
   }, []);
 
+  /**
+   * Show a success line, then clear it. It used to persist until the next
+   * action, which meant a confirmed transfer sat on screen indefinitely and
+   * could be mistaken for something still in flight. The countdown is visible
+   * so it never disappears without warning, and hovering holds it open.
+   */
+  const flash = (text: string, ms: number) => {
+    if (noteTimer.current) clearInterval(noteTimer.current);
+    setNote(text);
+    setNoteLeft(Math.ceil(ms / 1000));
+    noteTimer.current = setInterval(() => {
+      setNoteLeft((s) => {
+        if (s <= 1) {
+          if (noteTimer.current) clearInterval(noteTimer.current);
+          noteTimer.current = null;
+          setNote(null);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  const clearFlash = () => {
+    if (noteTimer.current) clearInterval(noteTimer.current);
+    noteTimer.current = null;
+    setNote(null);
+    setNoteLeft(0);
+  };
+
+  // A success line left running when the tab goes away would fire into an
+  // unmounted tree, so stop it on unmount.
+  useEffect(() => () => { if (noteTimer.current) clearInterval(noteTimer.current); }, []);
+
   const run = async (label: string, fn: () => Promise<string>) => {
-    setBusy(label); setErr(null); setNote(null);
+    setBusy(label); setErr(null); clearFlash();
     try {
-      setNote(await fn());
+      flash(await fn(), NOTE_MS);
       await Promise.all([refresh(), loadAll()]);
       return true;
     } catch (e: unknown) {
@@ -782,7 +825,14 @@ export default function Pay() {
       </div>
 
       {err && <div className="msg msg-err">{err}</div>}
-      {note && <div className="msg msg-ok">{note}</div>}
+      {note && (
+        <div className="msg msg-ok" onMouseEnter={() => clearFlash()}>
+          <span className="msg-txt">{note}</span>
+          <button className="msg-x" onClick={clearFlash} aria-label="Dismiss">
+            {noteLeft}s ✕
+          </button>
+        </div>
+      )}
 
       {tab === 'send' && (
         <div className="card">

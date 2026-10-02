@@ -395,6 +395,39 @@ body {
 }
 
 .msg-ok {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.msg-txt {
+  flex: 1;
+}
+
+.msg-x {
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  opacity: 0.65;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.msg-x:hover {
+  opacity: 1;
+}
+
+.msg-x:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.msg-ok {
   background: var(--ok-bg);
   border-color: var(--ok-line);
   color: var(--ok-ink);
