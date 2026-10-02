@@ -289,7 +289,7 @@ export default function Pay() {
       if (!lookup) throw new Error('Look up a username first');
       const units = BigInt(Math.round(parseFloat(sendAmt) * 1e6));
       const h = await writeContractAsync({
-        address: USDC, abi: ['function transfer(address,uint256)'] as any,
+        address: USDC, abi: ERC20_ABI,
         functionName: 'transfer', args: [lookup, units],
       });
       await waitForTransactionReceipt(client, { hash: h });
