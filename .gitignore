@@ -39,3 +39,4 @@ trace-usdc.py
 trace-tx.py
 probe-logs.py
 prove-transfers.py
+check-history.py
