@@ -607,6 +607,16 @@ export default function Pay() {
           </div>
         )}
 
+        {err && <div className="msg msg-err">{err}</div>}
+        {note && (
+          <div className="msg msg-ok" onMouseEnter={() => clearFlash()}>
+            <span className="msg-txt">{note}</span>
+            <button className="msg-x" onClick={clearFlash} aria-label="Dismiss">
+              {noteLeft}s ✕
+            </button>
+          </div>
+        )}
+
         {step === 'welcome' && (
           <div className="card">
             <h2 className="card-h">How it works</h2>
