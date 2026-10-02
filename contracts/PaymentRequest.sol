@@ -56,6 +56,7 @@ contract PaymentRequest {
     error TransferFailed();
     error NotNamedPayer(uint256 id, address caller);
     error AlreadyResponded(uint256 id);
+    error CannotPayOwnRequest(uint256 id);
 
     event RequestOpened(
         uint256 indexed id,
@@ -167,6 +168,11 @@ contract PaymentRequest {
         if (r.status != Status.Open) revert InvalidStatus(id, r.status);
         if (block.timestamp >= r.expiresAt) revert ExpiryPassed(id);
         if (responded[id][msg.sender]) revert AlreadyResponded(id);
+        // The requester must never settle their own claim. Without this the
+        // call resolves to transferFrom(requester, requester), moving nothing
+        // while marking the request Paid, inflating totalSettled and
+        // permanently silencing the named payer.
+        if (msg.sender == r.requester) revert CannotPayOwnRequest(id);
 
         uint256 left = r.amount - r.collected;
         if (amount == 0 || amount > left) revert NothingToCollect(id, left);

@@ -122,6 +122,14 @@ contract UsernameRegistry {
         }
         if (newOwner == address(0)) revert InvalidUsername("");
 
+        // Writing _usernameOf[newOwner] without this guard would clobber the
+        // recipient's existing name while leaving their old _ownerOf entry
+        // pointing at them. The two mappings then disagree forever: the name is
+        // unclaimable by anyone, and the holder can never transfer it off a
+        // compromised or lost key.
+        string memory held = _usernameOf[newOwner];
+        if (bytes(held).length != 0) revert AddressAlreadyHasUsername(newOwner, held);
+
         delete _ownerOf[keccak256(bytes(current))];
         _usernameOf[msg.sender] = "";
         _usernameOf[newOwner] = current;
