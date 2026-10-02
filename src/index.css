@@ -46,6 +46,9 @@
   font-family: var(--sans);
   font-size: 15px;
   line-height: 1.5;
+  /* Balances and amounts must not shift width as digits change. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'cv05' 1, 'ss03' 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-synthesis: none;
@@ -253,6 +256,8 @@ body {
 .field:focus {
   outline: none;
   border-color: var(--brand);
+  /* Keyboard users need a visible ring, not just a border tint. */
+  box-shadow: 0 0 0 3px var(--brand-dim);
   background: var(--bg);
 }
 
@@ -1101,4 +1106,56 @@ body {
 
 .foot a:hover {
   color: var(--ink);
+}
+/* ============================================================
+   polish
+   ============================================================ */
+
+/* Respect the OS setting. Motion here is decorative: a spinner on a button and
+   the toast's arrival. Neither carries meaning on its own. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Long usernames and memos must not widen the card or break the layout. */
+.field,
+.lookup,
+.req-note,
+.req-from,
+.req-why {
+  overflow-wrap: anywhere;
+}
+
+/* iOS zooms the viewport on focus when a field is under 16px, which throws the
+   whole form out of view. */
+@media (max-width: 520px) {
+  .field {
+    font-size: 16px;
+  }
+}
+
+/* The brand mark should not be selectable as stray text. */
+.mark,
+.brand-name {
+  user-select: none;
+}
+
+/* A disabled primary button should not still look clickable. */
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Keep long memos from setting an unbounded line length. */
+.req-note,
+.req-why,
+.card-p {
+  max-width: 62ch;
 }

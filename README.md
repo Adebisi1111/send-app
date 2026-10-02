@@ -1,18 +1,18 @@
-# Send
+# Ease
 
-Send USDC to anyone by username on Arc. Ask someone for USDC against a stated
-purpose, and let them pay you — nothing is held in between.
+Send USDC to anyone by username on Arc. Request it from someone with a stated
+reason, and let them choose — nothing is held in between.
 
 A wallet address is 42 characters and impossible to remember or check. `@adaeze`
 is neither.
 
 ## The model
 
-The person who asks is the person who receives.
+The person who requests is the person who receives.
 
 ```
-Alice (asks)              Bob (accepts)
-wants to RECEIVE   ←────  pays from his own wallet
+Alice (requests)           Bob (pays or declines)
+wants to RECEIVE   ←────  decides, from his own wallet
 ```
 
 A request is a claim, not an escrow. Settling it moves the payer's own USDC

@@ -657,11 +657,11 @@ export default function Pay() {
     return (
       <div className="connect">
         <div className="card connect-card">
-          <div className="mark">S</div>
-          <h1>Send USDC by name</h1>
+          <div className="mark">E</div>
+          <h1>Ease</h1>
           <p>
-            Send USDC to anyone by username, or ask someone for USDC and let them pay
-            you. Nothing is held in escrow, so nothing can get stuck.
+            Send USDC to anyone by username, or request it with a reason and let them
+            choose. Funds move wallet to wallet — Ease never holds yours.
           </p>
           {connectors.map((c) => (
             <button key={c.id} onClick={() => connect({ connector: c })} className="btn btn-lg btn-full">
@@ -676,7 +676,7 @@ export default function Pay() {
               USDC is the gas token on Arc, so sending costs nothing in the network fee.
             </p>
             <p className="net-copy">
-              Non-custodial throughout: the payer sends their own USDC straight to you.
+              USDC moves straight from the sender's wallet to the recipient's. Ease never holds it.
             </p>
           </div>
         </div>
@@ -690,8 +690,8 @@ export default function Pay() {
       <div className="shell">
         <header className="top">
           <div className="brand">
-            <div className="mark">S</div>
-            <span className="brand-name">Send</span>
+            <div className="mark">E</div>
+            <span className="brand-name">Ease</span>
           </div>
           <div className={`pill${wrongChain ? ' pill-bad' : ''}`}>
             <span className="dot" />{wrongChain ? `Chain ${chainId}` : 'Arc mainnet'}
@@ -715,7 +715,7 @@ export default function Pay() {
           <div className={`step${step === 'claim' ? ' step-now' : ''}`}>
             <span className="step-n">{step === 'claim' ? '2' : '3'}</span><span>Claim a username</span>
           </div>
-          <div className="step"><span className="step-n">3</span><span>Send, ask or settle</span></div>
+          <div className="step"><span className="step-n">3</span><span>Send, request, settle</span></div>
         </div>
 
         {balance !== null && (
@@ -741,14 +741,14 @@ export default function Pay() {
           <div className="card">
             <h2 className="card-h">How it works</h2>
             <p className="card-p">
-              Send USDC to anyone by username. Or ask someone for USDC and let them pay
+              Send USDC to anyone by username. Or request it from someone and let them choose
               you — either way the money goes straight between wallets.
             </p>
             <ul className="feat">
               <li>Send to anyone by username, no address needed</li>
-              <li>Ask someone for USDC against a stated purpose</li>
-              <li>They accept or decline — your choice either way</li>
-              <li>Nothing is escrowed, so nothing can get stuck</li>
+              <li>Request USDC from a named person, with a stated reason</li>
+              <li>They choose to pay or decline</li>
+              <li>Nothing is escrowed, so funds cannot get stuck</li>
             </ul>
             <button className="btn btn-lg btn-full" onClick={() => setStep('claim')}>
               Pick a username →
@@ -759,7 +759,7 @@ export default function Pay() {
         {step === 'claim' && (
           <div className="card">
             <h2 className="card-h">Claim your username</h2>
-            <p className="card-p">This is how people will ask you for USDC. It is permanent.</p>
+            <p className="card-p">This is how people will reach you for USDC. It is permanent.</p>
             <div className="row">
               <input className="field" id="claim-name" placeholder="yourname" value={name} maxLength={20}
                 onChange={(e) => { setName(e.target.value.replace(/[^a-zA-Z0-9_]/g, '')); setNameState({}); }} />
@@ -768,7 +768,7 @@ export default function Pay() {
               </button>
             </div>
             {nameState.taken && <div className="err-text">That name is taken.</div>}
-            <div className="label label-sp">Or try one of these</div>
+            <div className="label label-sp">Available names</div>
             <div className="chips">
               {suggestions.map((s) => (
                 <button key={s} className={`chip${name === s ? ' chip-on' : ''}`}
@@ -892,8 +892,8 @@ export default function Pay() {
     <div className="shell">
       <header className="top">
         <div className="brand">
-          <div className="mark">S</div>
-          <span className="brand-name">Send</span>
+          <div className="mark">E</div>
+          <span className="brand-name">Ease</span>
         </div>
         <div className="acct">
           <div className="bal">
@@ -993,7 +993,7 @@ export default function Pay() {
 
       {tab === 'send' && (
         <div className="card">
-          <label className="label" htmlFor="send-to">Send USDC to a username</label>
+          <label className="label" htmlFor="send-to">Send USDC to</label>
           <input id="send-to" className="field" placeholder="username, e.g. kwame" autoComplete="off"
             value={sendTo} onChange={(e) => setSendTo(e.target.value)} />
 
@@ -1024,7 +1024,7 @@ export default function Pay() {
 
       {tab === 'ask' && (
         <div className="card">
-          <label className="label" htmlFor="ask-to">Ask someone for USDC</label>
+          <label className="label" htmlFor="ask-to">Request USDC from a username</label>
           <input id="ask-to" className="field" placeholder="username, e.g. kwame"
             value={to} onChange={(e) => setTo(e.target.value)} />
 
@@ -1048,7 +1048,7 @@ export default function Pay() {
           {actionable.length === 0 && (
             <div className="card empty">
               <div className="empty-mark">◎</div>
-              {busy ?? 'Nothing pending. Requests other people make of you show up here.'}
+              {busy ?? 'Nothing pending. Requests people make of you show up here.'}
             </div>
           )}
           {actionable.map((r) => renderRequest(r, 'pay'))}
@@ -1060,7 +1060,7 @@ export default function Pay() {
           {history.length === 0 && direct.length === 0 && (
             <div className="card empty">
               <div className="empty-mark">◎</div>
-              {busy ?? 'Nothing here yet. Send someone USDC, or ask them for some.'}
+              {busy ?? 'Nothing here yet. Send someone USDC, or request some.'}
             </div>
           )}
           {history.map((r) => renderRequest(r, 'history'))}
