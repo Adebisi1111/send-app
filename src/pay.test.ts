@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   usdc, fmtUsdc, short, STATUS, DAY, ZERO,
-  isOpen, isOpenRequest, remaining, mergeActionable, directionOf, explain,
+  isOpen, isOpenRequest, remaining, mergeActionable, directionOf, explain, sameAddress,
   type Request,
 } from './pay';
 
@@ -194,5 +194,42 @@ describe('turning wallet errors into something actionable', () => {
 
   it('falls back when there is no message at all', () => {
     expect(explain({})).toContain('Try again');
+  });
+});
+
+describe('address comparison across casing', () => {
+  // Exactly the pair from mainnet: the raw decoder returns lowercase, wagmi
+  // returns EIP-55 checksummed.
+  const RAW = '0x48d3cd11b1bbeb04e52d7bcd97f1ded63a82c874';
+  const CHECKSUMMED = '0x48d3cd11B1bBeb04e52D7bcd97f1dEd63A82C874';
+
+  it('matches the same address in either casing', () => {
+    expect(sameAddress(RAW, CHECKSUMMED)).toBe(true);
+    expect(sameAddress(CHECKSUMMED, RAW)).toBe(true);
+  });
+
+  it('still separates different addresses', () => {
+    expect(sameAddress(RAW, '0x1111111111111111111111111111111111111111')).toBe(false);
+  });
+
+  it('treats missing addresses as not matching', () => {
+    expect(sameAddress(undefined, CHECKSUMMED)).toBe(false);
+    expect(sameAddress(RAW, null)).toBe(false);
+  });
+
+  it('recognises the zero address in checksummed form', () => {
+    expect(isOpenRequest(request({ named: '0x0000000000000000000000000000000000000000' }))).toBe(true);
+  });
+
+  it('a named payer matches themselves despite casing', () => {
+    // This is what gated the Decline button.
+    const r = request({ named: RAW });
+    expect(sameAddress(r.named, CHECKSUMMED)).toBe(true);
+  });
+
+  it('orders an open request after a named one regardless of case', () => {
+    const ZERO_ = '0x0000000000000000000000000000000000000000';
+    const out = mergeActionable([request({ id: 1n })], [request({ id: 2n, named: ZERO_ })]);
+    expect(out.map((x) => x.id)).toEqual([1n, 2n]);
   });
 });

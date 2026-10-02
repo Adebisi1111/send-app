@@ -89,6 +89,14 @@ export const fmtUsdc = (v: bigint): string =>
 export const short = (a: string): string => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 /**
+ * Addresses read from the chain by the raw decoder come back lowercase, while
+ * wagmi hands back EIP-55 checksummed. Comparing them with === never matches,
+ * so anything gated on "is this me" silently fails. Normalise before comparing.
+ */
+export const sameAddress = (a?: string | null, b?: string | null): boolean =>
+  !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
+/**
  * viem and several wallets both surface a bare "Http request failed" for what
  * are several different problems. Those are the common ones and what to do
  * about them; anything else is passed through untouched so a real revert reason
@@ -130,7 +138,7 @@ export const DAY = 86_400;
 export const remaining = (r: Request): bigint => r.amount - r.collected;
 export const isOpen = (r: Request): boolean => r.status === 1;
 /** An open request that named nobody — anyone can fulfil it. */
-export const isOpenRequest = (r: Request): boolean => isOpen(r) && r.named === ZERO;
+export const isOpenRequest = (r: Request): boolean => isOpen(r) && sameAddress(r.named, ZERO);
 
 /**
  * Merge the requests a person was asked for with the open feed into the single
@@ -158,8 +166,8 @@ export const mergeActionable = (named: Request[], open: Request[]): Request[] =>
     out.push(r);
   }
   return out.sort((a, b) => {
-    const ao = a.named === ZERO ? 1 : 0;
-    const bo = b.named === ZERO ? 1 : 0;
+    const ao = isOpenRequest(a) ? 1 : 0;
+    const bo = isOpenRequest(b) ? 1 : 0;
     return ao !== bo ? ao - bo : Number(b.id - a.id);
   });
 };

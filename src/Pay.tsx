@@ -5,8 +5,9 @@ import { waitForTransactionReceipt } from 'viem/actions';
 import { arc } from './chain';
 import {
   USDC, REGISTRY, REQUESTS, REGISTRY_ABI, REQUEST_ABI, ERC20_ABI,
-  STATUS, fmtUsdc, short, DAY, ZERO,
-  isOpen, isOpenRequest, remaining, mergeActionable, directionOf, explain, RPC_URL,
+  STATUS, fmtUsdc, short, DAY,
+  isOpen, isOpenRequest, remaining, mergeActionable, directionOf, explain, sameAddress,
+  RPC_URL,
   type Request,
 } from './pay';
 
@@ -710,7 +711,7 @@ export default function Pay() {
         <div className="req-why">{r.purpose}</div>
         <div className="req-from">
           {directionOf(r, address ?? zeroAddress) === 'asking'
-            ? <>asked of {r.named === ZERO ? 'anyone' : `@${r.username || short(r.named)}`}</>
+            ? <>asked of {isOpenRequest(r) ? 'anyone' : `@${r.username || short(r.named)}`}</>
             : <>asked of you by @{r.username || short(r.requester)}</>}
         </div>
 
@@ -730,16 +731,16 @@ export default function Pay() {
         {mode === 'pay' && open && (
           <>
             <div className="req-note">
-              Leaves your wallet and goes straight to {r.requester === address ? 'you' : 'the asker'}.
+              Leaves your wallet and goes straight to {sameAddress(r.requester, address) ? 'you' : 'the asker'}.
               {left !== r.amount && ` ${fmtUsdc(left)} USDC still needed.`}
             </div>
-            {r.requester !== address && (
+            {!sameAddress(r.requester, address) && (
               <>
                 <div className="req-actions">
                   <button onClick={() => settle(r, true)} disabled={!!busy} className="btn">
                     {busy ?? `Pay ${fmtUsdc(left)} USDC`}
                   </button>
-                  {r.named === address && (
+                  {sameAddress(r.named, address) && (
                     <button onClick={() => refuse(r)} disabled={!!busy} className="btn btn-ghost">
                       Decline
                     </button>
@@ -756,7 +757,7 @@ export default function Pay() {
                 </details>
               </>
             )}
-            {r.requester === address && (
+            {sameAddress(r.requester, address) && (
               <div className="req-note">This is your own request. Waiting for {left === r.amount ? 'someone to pay' : `${fmtUsdc(left)} USDC more`}.</div>
             )}
           </>
