@@ -329,18 +329,28 @@ export default function Pay() {
     } catch {
       /* transient RPC failure — retried on the next tick */
     }
+  }, [address]);
 
-    // A direct Send is a plain ERC-20 transfer, so it has no request id and the
-    // contract views above cannot see it. Without this, sending someone USDC
-    // left no trace in History at all.
+  const seen = useRef<Set<string>>(new Set());
+
+  // A direct Send is a plain ERC-20 transfer with no request id, so the
+  // contract views cannot see it. Reading it means walking thousands of blocks
+  // of logs against a node that rate-limits, so it must NOT sit on the polling
+  // path: doing that starved the poll that raises notifications. Loaded on
+  // mount and whenever the History tab is opened instead.
+  const loadDirect = useCallback(async () => {
+    if (!address) return;
     try {
-      setDirect(await fetchDirectTransfers(address));
+      const t = await fetchDirectTransfers(address);
+      setDirect(t);
+      // Prime the notification set from what already happened. Without this the
+      // first poll after loading would announce every past transfer at once,
+      // which reads as a flood of alerts the user never caused.
+      seenTx.current = new Set(t.map((x) => x.hash));
     } catch {
       /* rate limited or the node refused the range; requests still show */
     }
   }, [address]);
-
-  const seen = useRef<Set<string>>(new Set());
 
   // Watch for settlements so a request surfaces without a manual refresh.
   const poll = useCallback(async () => {
@@ -370,14 +380,46 @@ export default function Pay() {
     }
   }, [address, loadAll]);
 
+  // The poll above only covers requests somebody owes you. This covers money
+  // actually moving in either direction, so a send or a payment landing is
+  // announced the same way a request is. It reads a shallow window on purpose:
+  // this runs on the polling path, where a deep scan would starve it.
+  const seenTx = useRef<Set<string>>(new Set());
+
+  const pollTransfers = useCallback(async () => {
+    if (!address) return;
+    if (!seenTx.current.size) return; // not primed yet; priming clears this
+    try {
+      const recent = await fetchDirectTransfers(address, { lookback: 3_000, step: 500 });
+      for (const t of recent) {
+        if (seenTx.current.has(t.hash)) continue;
+        seenTx.current.add(t.hash);
+        const body = t.outgoing
+          ? `Sent ${t.amount} USDC to ${short(t.counterparty)}`
+          : `Received ${t.amount} USDC from ${short(t.counterparty)}`;
+        setAlert({ title: t.outgoing ? 'Send confirmed' : 'Payment received', body });
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(body, { tag: `send-tx-${t.hash}` });
+        }
+      }
+    } catch {
+      /* rate limited; the next tick retries */
+    }
+  }, [address]);
+
   useEffect(() => {
     if (step !== 'ready') return;
     void poll().then(() => { seen.current.clear(); });
-    const t = setInterval(() => { if (document.visibilityState === 'visible') void poll(); }, 12_000);
+    void loadDirect();
+    const t = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void poll();
+      void pollTransfers();
+    }, 12_000);
     const onVis = () => { if (document.visibilityState === 'visible') void poll(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
-  }, [step, poll]);
+  }, [step, poll, pollTransfers, loadDirect]);
 
   // A shared request link opens the To Pay tab.
   useEffect(() => {
@@ -886,7 +928,11 @@ export default function Pay() {
           ['mine', 'History'],
         ] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`tab${tab === k ? ' tab-on' : ''}`}
-            onClick={() => setTab(k)}>
+            onClick={() => {
+              setTab(k);
+              // Re-read sends on demand: the scan is too slow for the poll.
+              if (k === 'mine') void loadDirect();
+            }}>
             {l}
             {k === 'topay' && actionable.length > 0 && <span className="badge-n">{actionable.length}</span>}
           </button>

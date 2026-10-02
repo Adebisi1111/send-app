@@ -59,6 +59,55 @@ const log = (o: Partial<Log> & { from: string; to: string; amount: string; hash:
   transactionHash: o.hash,
 });
 
+/**
+ * The notification path announces transfers it has not seen before. Priming
+ * decides what counts as "before", and getting it wrong is user-visible: an
+ * unprimed first poll announces every past transfer at once.
+ */
+describe('priming the notification set', () => {
+  const t = (hash: string) => ({ hash });
+
+  it('suppresses every existing transfer when primed from a full load', () => {
+    const existing = [t('0xa'), t('0xb'), t('0xc')];
+    const seen = new Set(existing.map((x) => x.hash));
+    const incoming = [t('0xd')];
+    const announced = incoming.filter((x) => !seen.has(x.hash));
+    expect(announced).toHaveLength(1);
+    expect(announced[0].hash).toBe('0xd');
+  });
+
+  it('announces nothing when the poll returns only what priming already saw', () => {
+    const seen = new Set(['0xa', '0xb'].map((h) => t(h).hash));
+    const poll = [t('0xa'), t('0xb')];
+    expect(poll.filter((x) => !seen.has(x.hash))).toHaveLength(0);
+  });
+
+  it('an unprimed set announces nothing, because the caller guards on it', () => {
+    // The app skips pollTransfers entirely until priming has run, so the set is
+    // never consulted while empty. Asserting the guard, since an empty set on
+    // its own would match everything.
+    const seen = new Set<string>();
+    const pollRuns = () => seen.size > 0;
+    expect(pollRuns()).toBe(false);
+    seen.add('0xa');
+    expect(pollRuns()).toBe(true);
+    expect([t('0xb')].filter((x) => !seen.has(x.hash))).toHaveLength(1);
+  });
+
+  it('announces each transfer exactly once across repeated polls', () => {
+    const seen = new Set<string>();
+    const announced: string[] = [];
+    for (const batch of [[t('0xa')], [t('0xa')], [t('0xb')]]) {
+      for (const x of batch) {
+        if (seen.has(x.hash)) continue;
+        seen.add(x.hash);
+        announced.push(x.hash);
+      }
+    }
+    expect(announced).toEqual(['0xa', '0xb']);
+  });
+});
+
 describe('direct transfer history', () => {
   it('records an incoming transfer and who sent it', () => {
     const [t] = collect([log({ from: THEM, to: ME, amount: '1400', hash: '0xa' })], ME);

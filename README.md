@@ -63,7 +63,14 @@ Request takes a username, an amount and a purpose. Asking costs about half a
 cent and locks nothing — the balance does not move, because no escrow exists.
 
 Pending lists what you might pay or decline. A request naming you shows **Pay**
-and **Decline**. History is a record and offers no controls. It covers both kinds of movement: a
+and **Decline**. Notifications: the app polls every 12 seconds while visible and announces both
+a request somebody owes you and a transfer that landed in either direction. The
+first load primes the seen-set from what already happened, so opening the app
+does not replay old transfers as a burst of alerts. Transfers are re-read when
+History is opened rather than on every tick, because walking thousands of blocks
+of logs against a rate-limited node would otherwise starve the poll.
+
+History is a record and offers no controls. It covers both kinds of movement: a
 plain Send, which is a direct ERC-20 transfer with no request behind it, and a
 request that was asked, paid or declined. Sends are read from `Transfer` logs
 for the connected account, so they show up on both sides.
@@ -91,11 +98,11 @@ transactions and reading the resulting chain state:
   reverted and the name still resolved to its real owner, while a transfer to a
   name-less address in the same block succeeded
 
-`125` contract tests and `47` frontend tests:
+`125` contract tests and `51` frontend tests:
 
 ```bash
 forge test        # 125 passing
-npx vitest run    # 47 passing
+npx vitest run    # 51 passing
 ```
 
 The contract suite covers what is easy to get wrong: that asking escrows
