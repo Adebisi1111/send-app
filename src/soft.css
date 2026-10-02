@@ -1,0 +1,448 @@
+/* ============================================================
+   Ease — "soft card" light theme
+   ============================================================
+   Pale neutral surfaces, one green, hairline rows, and no filled
+   colour anywhere except the primary button. Warmth comes from the
+   copy rather than from saturated surfaces, which is what keeps it
+   reading as a tool rather than a toy.
+
+   Loaded after index.css, so it only restates what changes. The dark
+   theme stays intact underneath and is one comment away.
+
+   Every colour below was checked as a ratio against the two surfaces
+   it actually appears on, not chosen by eye. Two of the values from
+   the original sketch were rejected during that pass: its muted grey
+   (#8a968e) measured 2.83:1 on the page and its green (#12855c)
+   measured 4.26:1, both failing AA at the sizes they are used. What
+   ships is the darker green #0d6f4c (5.69:1 on page, 6.19:1 on
+   card, 6.19:1 under white button text).
+   ============================================================ */
+
+:root {
+  /* surfaces */
+  --bg: #f4f6f4;
+  --bg-elev: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #eef1ee;
+
+  /* hairline rules do the separating */
+  --line: #e7ebe8;
+  --line-strong: #dbe2dd;
+
+  /* type — ink-3 is the muted tier and has to clear 4.5 on the page */
+  --ink: #16211a;
+  --ink-2: #54635a;
+  --ink-3: #5c6c62;
+
+  /* brand + state */
+  --brand: #0d6f4c;
+  --brand-hi: #0f8259;
+  --brand-dim: rgba(13, 111, 76, 0.12);
+  --brand-ink: #ffffff;
+
+  --danger: #a32e21;
+  --danger-bg: #fdecea;
+  --danger-line: #f0cdc8;
+  --ok-ink: #0d6f4c;
+  --ok-bg: #e7f4ee;
+  --ok-line: #c9e2d6;
+
+  /* pending wants its own tier: amber, not a darker green, so an
+     unanswered request never reads as settled */
+  --warn-ink: #8a5200;
+  --warn-bg: #fbf1e2;
+  --warn-line: #ecdcbe;
+
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
+
+  --shadow: 0 1px 2px rgba(22, 33, 26, 0.04);
+  --shadow-lg: 0 6px 20px -8px rgba(22, 33, 26, 0.16);
+
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------ surfaces */
+
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  /* barely there: the border is the structure, the shadow only lifts */
+  box-shadow: var(--shadow);
+}
+
+.field {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+}
+
+.field:hover:not(:focus) {
+  border-color: var(--line-strong);
+}
+
+.field:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-dim);
+}
+
+.field::placeholder {
+  color: var(--ink-3);
+}
+
+/* ------------------------------------------------------------ type */
+
+.mark {
+  background: var(--brand);
+  color: #fff;
+  border-radius: var(--r-sm);
+  box-shadow: none;
+}
+
+.brand-name,
+.connect h1 {
+  color: var(--ink);
+}
+
+.bal,
+.bal-amt,
+.req-amt {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.bal-amt,
+.req-amt {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.bal-unit,
+.wallet,
+.req-from,
+.hint,
+.net-copy,
+.req-why {
+  color: var(--ink-2);
+}
+
+/* labels read as labels, not as shouting */
+.label {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------ controls */
+
+/* the only filled surface in the interface, so it reads as the one
+   action that matters */
+.btn {
+  background: var(--brand);
+  color: #fff;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--brand-hi);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.btn-warn {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* tabs are a text row with an underline, not a segmented control */
+.tabs {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 0;
+  gap: 22px;
+}
+
+.tab {
+  border-radius: 0;
+  color: var(--ink-3);
+  font-weight: 500;
+  padding: 10px 0;
+  position: relative;
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--brand);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.24s ease;
+}
+
+.tab:hover::after {
+  transform: scaleX(0.4);
+}
+
+.tab.tab-on {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tab.tab-on::after {
+  transform: scaleX(1);
+}
+
+.badge-n {
+  background: var(--brand);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------ state */
+
+.msg-ok {
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-line);
+  color: var(--ok-ink);
+  padding: 12px 14px;
+  border-radius: var(--r);
+  line-height: 1.5;
+}
+
+/* Alerts arrive one after another; without separation a success line and the
+   error beneath it read as a single collided block. */
+.err-text {
+  margin: 14px 0 0;
+  line-height: 1.5;
+}
+
+.net-warn {
+  line-height: 1.5;
+}
+
+.net-warn + * {
+  margin-top: 12px;
+}
+
+.msg-err,
+.err-text {
+  color: var(--danger);
+}
+
+.lookup {
+  color: var(--brand);
+}
+
+.lookup-bad {
+  color: var(--danger);
+}
+
+.net-warn {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-line);
+  color: var(--danger);
+}
+
+.pill {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-2);
+}
+
+.dot {
+  background: var(--brand);
+}
+
+.badge {
+  background: var(--bg-hover);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+
+.badge-pending {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border-color: var(--warn-line);
+}
+
+.badge-released {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+  border-color: var(--ok-line);
+}
+
+.badge-cancel {
+  background: var(--bg-hover);
+  color: var(--ink-3);
+}
+
+.empty {
+  border-style: dashed;
+  border-color: var(--line-strong);
+  color: var(--ink-3);
+}
+
+.chip {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+
+.chip-on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.toast {
+  background: var(--bg-elev);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-lg);
+  color: var(--ink);
+}
+
+.check input {
+  accent-color: var(--brand);
+}
+
+/* ------------------------------------------------------------ rules */
+
+.req-head,
+.req-from,
+.req-note,
+.req-progress {
+  border-color: var(--line);
+}
+
+.req-progress {
+  background: var(--bg-hover);
+}
+
+.req-progress > span {
+  background: var(--brand);
+}
+
+/* The one element lifted from the "people first" variant: the reason a
+   request exists is the part a human cares about, so it is set as a
+   quotation rather than a metadata row. */
+.req-said {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 8px;
+  color: var(--ink-2);
+}
+
+.req-said-mark {
+  flex: none;
+  width: 2px;
+  align-self: stretch;
+  min-height: 18px;
+  background: var(--line-strong);
+  border-radius: 2px;
+}
+
+.req-said-text {
+  font-style: italic;
+  line-height: 1.45;
+}
+
+.seg {
+  background: transparent;
+  border-color: var(--line);
+}
+
+.seg-on {
+  background: var(--brand);
+  color: #fff;
+}
+
+.steps .step {
+  border-color: var(--line);
+}
+
+.foot {
+  color: var(--ink-3);
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.foot a {
+  color: var(--ink-2);
+  border-bottom-color: var(--line-strong);
+}
+
+/* Global anchor reset. index.css only styles .foot a, so every other link
+   inherited the UA default (rgb(0,0,238)) — off-palette and unreadable as
+   part of this design. */
+a {
+  color: var(--brand);
+  text-decoration-color: var(--brand-dim);
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  text-decoration-color: var(--brand);
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration: underline;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* "view" on a 15px line is a small target; padding lifts it to ~24px
+   without changing the visual rhythm of the note. */
+.req-note a,
+.req-from a {
+  display: inline-block;
+  padding: 4px 2px;
+  margin: -4px -2px;
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------ focus */
+
+.btn:focus-visible,
+.tab:focus-visible,
+.field:focus-visible,
+.chip:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab::after {
+    transition: none;
+  }
+}

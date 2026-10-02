@@ -811,7 +811,10 @@ export default function Pay() {
           <span className="req-amt">{fmtUsdc(r.amount)} USDC</span>
           <span className={badgeClass(r.status)}>{STATUS[r.status]}</span>
         </div>
-        <div className="req-why">{r.purpose}</div>
+        <div className="req-said">
+          <span className="req-said-mark" aria-hidden="true" />
+          <span className="req-said-text">{r.purpose}</span>
+        </div>
         <div className="req-from">
           {directionOf(r, address ?? zeroAddress) === 'asking'
             ? <>asked of {isOpenRequest(r) ? 'anyone' : `@${r.username || short(r.named)}`}</>

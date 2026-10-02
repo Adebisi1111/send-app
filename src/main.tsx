@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
+import './index.css';
+import './soft.css';
 import App from './Pay.tsx'
 import { WagmiProvider, createConfig, http } from 'wagmi'
 import { injected } from 'wagmi/connectors'
