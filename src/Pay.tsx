@@ -861,7 +861,7 @@ export default function Pay() {
 
       <div className="foot">
         Non-custodial on Arc mainnet ·{' '}
-        <a href="https://explorer.arc.io/address/0x285223c45050D7c93b8fF93Cc972580D2DD1f2EF" target="_blank" rel="noreferrer">
+        <a href={`https://explorer.arc.io/address/${REQUESTS}`} target="_blank" rel="noreferrer">
           contracts
         </a>
       </div>

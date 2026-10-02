@@ -4,9 +4,10 @@ dist
 .env.*
 *.key
 *.log
-out/
-cache/
 lib/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
 
 # Local test harness. These hold well-known anvil dev keys and must never be
 # published or deployed.
@@ -19,3 +20,8 @@ keys.txt
 
 # forge script artifacts (contain tx payloads)
 broadcast/
+
+# one-off deploy scratch: raw initcode for the live deployment
+.deploy_data.txt
+deploy-now.mjs
+deploy-fork.mjs
