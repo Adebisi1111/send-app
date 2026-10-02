@@ -87,11 +87,14 @@ async function loadMany(ids: bigint[]): Promise<Request[]> {
 // ---------------------------------------------------------------- app
 
 export default function Pay() {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
+  // wagmi can report isConnected before accounts resolve, which would skip
+  // every read. Treat connected as "has an address".
+  const isConnected = !!address;
   const { connect, connectors } = useConnect();
   const { writeContractAsync } = useWriteContract();
 
-  const [tab, setTab] = useState<'ask' | 'topay' | 'open' | 'mine'>('ask');
+  const [tab, setTab] = useState<'send' | 'ask' | 'topay' | 'open' | 'mine'>('send');
 
   const [balance, setBalance] = useState<bigint | null>(null);
   const [myName, setMyName] = useState<string | null>(null);
@@ -100,6 +103,12 @@ export default function Pay() {
   // asking
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
+
+  // direct send, separate from asking so the two forms never share a field
+  const [sendTo, setSendTo] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendNote, setSendNote] = useState('');
+  const [sendPreview, setSendPreview] = useState<`0x${string}` | null | 'unknown'>(null);
   const [purpose, setPurpose] = useState('');
   const [openToAnyone, setOpenToAnyone] = useState(false);
 
@@ -115,6 +124,7 @@ export default function Pay() {
   const [mine, setMine] = useState<Request[]>([]);
 
   const [busy, setBusy] = useState<string | null>(null);
+  const [contractMissing, setContractMissing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [alert, setAlert] = useState<{ title: string; body: string } | null>(null);
@@ -187,6 +197,14 @@ export default function Pay() {
   /** Balance and username. Safe to call after anything that moves money. */
   const refresh = async () => {
     if (!address) return;
+    // A wrong or undeployed address returns empty data, which otherwise fails
+    // silently and leaves the UI stuck. Fail loudly instead.
+    try {
+      const code = await client.getCode({ address: REQUESTS });
+      if (!code || code === '0x') setContractMissing(true);
+    } catch {
+      setContractMissing(true);
+    }
     try {
       const [bal, who] = await Promise.all([
         client.readContract({ address: USDC, abi: ERC20_ABI, functionName: 'balanceOf', args: [address] }),
@@ -208,7 +226,9 @@ export default function Pay() {
         const who = (await client.readContract({
           address: REGISTRY, abi: REGISTRY_ABI, functionName: 'usernameOf', args: [address],
         })) as unknown as string;
-        setStep(who && who.length ? 'ready' : 'welcome');
+        // An empty username decodes as '', but a missing one can surface as null.
+        // Anything that is not a non-empty string means "needs a username".
+        setStep(typeof who === 'string' && who.length > 0 ? 'ready' : 'welcome');
       } catch {
         setStep('welcome');
       }
@@ -385,6 +405,45 @@ export default function Pay() {
         : `Paid ${fmtUsdc(amt)} USDC — ${fmtUsdc(r.amount - r.collected - amt)} still to go`;
     });
 
+  // Resolve the recipient while typing so a mistyped name is caught before
+  // any USDC leaves the wallet.
+  useEffect(() => {
+    const handle = sendTo.replace(/^@/, '').trim().toLowerCase();
+    if (!handle) { setSendPreview(null); return; }
+    let live = true;
+    (async () => {
+      try {
+        const who = await resolveName(handle);
+        if (live) setSendPreview(who && who !== zeroAddress ? who : 'unknown');
+      } catch {
+        if (live) setSendPreview('unknown');
+      }
+    })();
+    return () => { live = false; };
+  }, [sendTo]);
+
+  const send = () =>
+    run('Sending…', async () => {
+      if (!address) throw new Error('Connect a wallet first');
+      const handle = sendTo.replace(/^@/, '').trim().toLowerCase();
+      if (!handle) throw new Error('Who are you sending to?');
+      const who = await resolveName(handle);
+      if (!who || who === zeroAddress) throw new Error(`No one is @${handle}`);
+      if (who === address) throw new Error('That is your own username');
+
+      const units = BigInt(Math.round(parseFloat(sendAmount) * 1e6));
+      if (!Number.isFinite(parseFloat(sendAmount)) || units <= 0n) throw new Error('Enter an amount');
+      if (balance !== null && units > balance) throw new Error('More than your balance');
+
+      const h = await writeContractAsync({
+        address: USDC, abi: ERC20_ABI, functionName: 'transfer', args: [who, units],
+      });
+      await waitForTransactionReceipt(client, { hash: h });
+      setSendAmount('');
+      setSendNote('');
+      return `Sent ${fmtUsdc(units)} USDC to @${handle}`;
+    });
+
   const cancelRequest = (r: Request) =>
     run('Closing…', async () => {
       const h = await writeContractAsync({
@@ -410,10 +469,10 @@ export default function Pay() {
       <div className="connect">
         <div className="card connect-card">
           <div className="mark">S</div>
-          <h1>Ask for USDC by name</h1>
+          <h1>Send USDC by name</h1>
           <p>
-            Leave a request for someone to pay — or settle one they left you. Nothing is
-            held in escrow, so a request costs nothing and nothing can get stuck.
+            Send USDC to anyone by username, or ask someone for USDC and let them pay
+            you. Nothing is held in escrow, so nothing can get stuck.
           </p>
           {connectors.map((c) => (
             <button key={c.id} onClick={() => connect({ connector: c })} className="btn btn-lg btn-full">
@@ -467,7 +526,7 @@ export default function Pay() {
           <div className={`step${step === 'claim' ? ' step-now' : ''}`}>
             <span className="step-n">{step === 'claim' ? '2' : '3'}</span><span>Claim a username</span>
           </div>
-          <div className="step"><span className="step-n">3</span><span>Ask or settle</span></div>
+          <div className="step"><span className="step-n">3</span><span>Send, ask or settle</span></div>
         </div>
 
         {balance !== null && (
@@ -483,11 +542,12 @@ export default function Pay() {
           <div className="card">
             <h2 className="card-h">How it works</h2>
             <p className="card-p">
-              You ask someone for USDC. They accept and pay from their own wallet — your
-              money never sits anywhere in between.
+              Send USDC to anyone by username. Or ask someone for USDC and let them pay
+              you — either way the money goes straight between wallets.
             </p>
             <ul className="feat">
-              <li>Ask anyone by username, or leave a request open to whoever finds it</li>
+              <li>Send by username, no address needed</li>
+              <li>Ask anyone for USDC, or leave a request open to whoever finds it</li>
               <li>Several people can chip into the same request</li>
               <li>Nothing is escrowed, so nothing can get stuck</li>
             </ul>
@@ -639,6 +699,18 @@ export default function Pay() {
         </div>
       )}
 
+      {contractMissing && (
+        <div className="net-warn" role="alert">
+          <div>
+            <div className="net-t">Contracts not found</div>
+            <div className="net-m">
+              Nothing is deployed at {short(REQUESTS)} on this chain. Point the app at a
+              live deployment with VITE_REQUESTS and the other addresses.
+            </div>
+          </div>
+        </div>
+      )}
+
       {wantNotify && (
         <div className="card notify-card">
           <div>
@@ -665,6 +737,7 @@ export default function Pay() {
 
       <div className="tabs" role="tablist">
         {([
+          ['send', 'Send'],
           ['ask', 'Ask'],
           ['topay', 'To Pay'],
           ['open', 'Open'],
@@ -681,6 +754,37 @@ export default function Pay() {
 
       {err && <div className="msg msg-err">{err}</div>}
       {note && <div className="msg msg-ok">{note}</div>}
+
+      {tab === 'send' && (
+        <div className="card">
+          <label className="label" htmlFor="send-to">Send USDC to a username</label>
+          <input id="send-to" className="field" placeholder="username, e.g. kwame" autoComplete="off"
+            value={sendTo} onChange={(e) => setSendTo(e.target.value)} />
+
+          {sendPreview !== null && (
+            <div className={`lookup${sendPreview === 'unknown' ? ' lookup-bad' : ''}`}>
+              {sendPreview === 'unknown'
+                ? `Nobody is @${sendTo.replace(/^@/, '').trim().toLowerCase()} — check the spelling`
+                : <>sending to {sendPreview === address ? 'you' : short(sendPreview)}</>}
+            </div>
+          )}
+
+          <input id="send-amt" className="field" placeholder="amount (USDC)" inputMode="decimal"
+            value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} />
+          <input id="send-note" className="field" placeholder="note (optional)" maxLength={140}
+            value={sendNote} onChange={(e) => setSendNote(e.target.value)} />
+
+          <button onClick={send} disabled={!!busy || sendPreview === 'unknown' || sendPreview === null}
+            className="btn btn-lg btn-full" style={{ marginTop: 14 }}>
+            {busy ?? 'Send'}
+          </button>
+          <p className="hint">
+            Goes straight from your wallet to theirs. No request, no contract in between,
+            and the network fee is paid in USDC.
+            {sendNote.trim() && ' The note is only for your own records — it is not stored on chain.'}
+          </p>
+        </div>
+      )}
 
       {tab === 'ask' && (
         <div className="card">

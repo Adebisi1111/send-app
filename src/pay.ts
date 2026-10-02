@@ -12,9 +12,9 @@ const LOCAL = 'http://127.0.0.1:8545';
 export const RPC_URL = import.meta.env.VITE_RPC ?? LOCAL;
 export const IS_LOCAL = RPC_URL.includes('127.0.0.1');
 
-export const USDC = (import.meta.env.VITE_USDC ?? '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318') as `0x${string}`;
-export const REGISTRY = (import.meta.env.VITE_REGISTRY ?? '0x610178dA211FEF7D417bC0e6FeD39F05609AD788') as `0x${string}`;
-export const REQUESTS = (import.meta.env.VITE_REQUESTS ?? '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e') as `0x${string}`;
+export const USDC = (import.meta.env.VITE_USDC ?? '0x5FbDB2315678afecb367f032d93F642f64180aa3') as `0x${string}`;
+export const REGISTRY = (import.meta.env.VITE_REGISTRY ?? '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512') as `0x${string}`;
+export const REQUESTS = (import.meta.env.VITE_REQUESTS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0') as `0x${string}`;
 
 const REGISTRY_ABI_SIG = [
   'function register(string) returns (string)',
