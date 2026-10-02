@@ -264,7 +264,7 @@ export default function Pay() {
     });
 
   const ask = () =>
-    run('Creating request…', async () => {
+    run('Setting aside USDC…', async () => {
       if (!address) throw new Error('Connect a wallet first');
       const units = BigInt(Math.round(parseFloat(amount) * 1e6));
       if (!(units > 0n)) throw new Error('Enter an amount');
@@ -287,9 +287,9 @@ export default function Pay() {
       const link = `${location.origin}/?r=${h}`;
       try {
         await navigator.clipboard.writeText(link);
-        return `Requested ${amount} USDC from @${to.replace(/^@/, '').toLowerCase()} — link copied, send it anywhere`;
+        return `Set aside ${amount} USDC for @${to.replace(/^@/, '').toLowerCase()} — link copied, send it anywhere`;
       } catch {
-        return `Requested ${amount} USDC from @${to.replace(/^@/, '').toLowerCase()}`;
+        return `Set aside ${amount} USDC for @${to.replace(/^@/, '').toLowerCase()}`;
       }
     });
 
@@ -344,11 +344,11 @@ export default function Pay() {
           const r = await readRequest(newest);
           if (r) {
             setAlert({
-              title: `${fmtUsdc(r.amount)} USDC requested`,
+              title: `${fmtUsdc(r.amount)} USDC waiting for you`,
               body: r.purpose || `From @${r.username}`,
             });
             if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification(`${fmtUsdc(r.amount)} USDC requested`, {
+              new Notification(`${fmtUsdc(r.amount)} USDC waiting for you`, {
                 body: r.purpose || `From @${r.username}`,
                 tag: `send-${newest}`,
               });
@@ -406,7 +406,7 @@ export default function Pay() {
       await waitForTransactionReceipt(client, { hash: h });
       await loadInbox();
       await refresh();
-      return `Released request #${id}`;
+      return `Paid @${id}`;
     });
 
   const cancel = (id: bigint) =>
@@ -442,8 +442,8 @@ export default function Pay() {
               switch to it any time from the app.
             </p>
             <p className="net-copy">
-              Non-custodial. Your USDC sits in the request contract, never with us, and can
-              be returned to you at any point before you release it.
+              Non-custodial. When you pay someone, your USDC goes straight into the contract — never
+              through us — and comes back to you if they don't collect.
             </p>
           </div>
         </div>
@@ -491,7 +491,7 @@ export default function Pay() {
           </div>
           <div className="step">
             <span className="step-n">3</span>
-            <span>Send or request USDC</span>
+            <span>Pay or get paid</span>
           </div>
         </div>
 
@@ -513,7 +513,7 @@ export default function Pay() {
             </p>
             <ul className="feat">
               <li>Claim a username once, then be paid by it</li>
-              <li>Request USDC with a reason, release with one tap</li>
+              <li>Pay anyone by name with a reason — they collect with one tap</li>
               <li>Cancel any time and your money comes straight back</li>
             </ul>
             <button className="btn btn-lg btn-full" onClick={() => setStep('claim')}>
@@ -589,7 +589,7 @@ export default function Pay() {
         <div className="card notify-card">
           <div>
             <div className="card-h sm">Get notified</div>
-            <p className="card-p sm">Allow notifications so a request reaches you without opening this app.</p>
+            <p className="card-p sm">Allow notifications so a payment reaches you without opening this app.</p>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={async () => {
             await Notification.requestPermission();
@@ -599,7 +599,7 @@ export default function Pay() {
       )}
 
       <div className="tabs" role="tablist">
-        {([['ask', 'Ask'], ['send', 'Send'], ['inbox', 'Inbox'], ['sent', 'Sent']] as const).map(([k, l]) => (
+        {([['ask', 'Pay'], ['send', 'Send'], ['inbox', 'Inbox'], ['sent', 'Sent']] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k}
             onClick={() => {
               setTab(k);
@@ -630,21 +630,22 @@ export default function Pay() {
 
       {tab === 'ask' && (
         <div className="card">
-          <label className="label" htmlFor="ask-to">Ask someone for USDC</label>
-          <input id="ask-to" className="field" placeholder="username" value={to} onChange={(e) => setTo(e.target.value)} />
+          <label className="label" htmlFor="ask-to">Pay someone</label>
+          <input id="ask-to" className="field" placeholder="who are you paying? (username)" value={to} onChange={(e) => setTo(e.target.value)} />
           <input id="ask-amt" className="field" placeholder="amount (USDC)" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <input id="ask-why" className="field" placeholder="what is it for?" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+          <input id="ask-why" className="field" placeholder="what is it for? e.g. tea" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
 
           <label className="check">
             <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-            <span>Anyone can release this to me with one tap — turn off if you want to approve it yourself</span>
+            <span>They can collect with one tap, or from a link I send them — turn off to approve each payment yourself</span>
           </label>
 
           <button onClick={ask} disabled={!!busy} className="btn btn-lg btn-full">
-            {busy ?? 'Request USDC'}
+            {busy ?? 'Pay & hold USDC'}
           </button>
           <p className="hint">
-            Your USDC is held in the request contract and stays refundable until you release it.
+            Your USDC is held in the contract now, and @username collects it when they accept.
+            You can cancel and get it back any time before then.
           </p>
         </div>
       )}
@@ -719,7 +720,7 @@ export default function Pay() {
               </div>
               <div className="req-why">{r.purpose}</div>
               <div className="req-from">
-                {r.username ? `@${r.username} · ` : ''}requested {short(r.requester)}
+                {r.username ? `@${r.username} · ` : ''}is owed {short(r.requester)}
               </div>
               {r.status === 1 && (
                 <div className="req-hint">
