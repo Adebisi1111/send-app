@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, useChainId, useConnect, useSwitchChain, useWriteContract } from 'wagmi';
 import { createPublicClient, http, zeroAddress } from 'viem';
 import { waitForTransactionReceipt } from 'viem/actions';
@@ -6,7 +6,7 @@ import { arc } from './chain';
 import {
   USDC, REGISTRY, REQUESTS, REGISTRY_ABI, REQUEST_ABI, ERC20_ABI,
   STATUS, fmtUsdc, short, DAY, ZERO,
-  isOpen, isOpenRequest, remaining, RPC_URL,
+  isOpen, isOpenRequest, remaining, mergeActionable, RPC_URL,
   type Request,
 } from './pay';
 
@@ -94,7 +94,7 @@ export default function Pay() {
   const { connect, connectors } = useConnect();
   const { writeContractAsync } = useWriteContract();
 
-  const [tab, setTab] = useState<'send' | 'ask' | 'topay' | 'open' | 'mine'>('send');
+  const [tab, setTab] = useState<'send' | 'ask' | 'topay' | 'mine'>('send');
 
   const [balance, setBalance] = useState<bigint | null>(null);
   const [myName, setMyName] = useState<string | null>(null);
@@ -123,6 +123,15 @@ export default function Pay() {
   const [openFeed, setOpenFeed] = useState<Request[]>([]);
   /** Everything the connected account has touched, in either direction. */
   const [history, setHistory] = useState<Request[]>([]);
+  /**
+   * Requests the account can act on, in one list: addressed to them by name,
+   * plus open requests anyone can settle. Two tabs for one job was the
+   * confusion, so it is one tab now.
+   */
+  const actionable = useMemo(
+    () => mergeActionable(toPay, openFeed),
+    [toPay, openFeed],
+  );
 
   const [busy, setBusy] = useState<string | null>(null);
   const [contractMissing, setContractMissing] = useState(false);
@@ -764,15 +773,13 @@ export default function Pay() {
         {([
           ['send', 'Send'],
           ['ask', 'Request'],
-          ['topay', 'To Pay'],
-          ['open', 'Open'],
+          ['topay', 'Requests'],
           ['mine', 'History'],
         ] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`tab${tab === k ? ' tab-on' : ''}`}
             onClick={() => setTab(k)}>
             {l}
-            {k === 'topay' && toPay.length > 0 && <span className="badge-n">{toPay.length}</span>}
-            {k === 'open' && openFeed.length > 0 && <span className="badge-n">{openFeed.length}</span>}
+            {k === 'topay' && actionable.length > 0 && <span className="badge-n">{actionable.length}</span>}
           </button>
         ))}
       </div>
@@ -850,25 +857,13 @@ export default function Pay() {
 
       {tab === 'topay' && (
         <div className="stack">
-          {toPay.length === 0 && (
+          {actionable.length === 0 && (
             <div className="card empty">
               <div className="empty-mark">◎</div>
-              {busy ?? 'No one has asked you for USDC.'}
+              {busy ?? 'Nothing needs your attention. Open requests anyone can settle will show up here.'}
             </div>
           )}
-          {toPay.map((r) => renderRequest(r, 'pay'))}
-        </div>
-      )}
-
-      {tab === 'open' && (
-        <div className="stack">
-          {openFeed.length === 0 && (
-            <div className="card empty">
-              <div className="empty-mark">◎</div>
-              {busy ?? 'No open requests right now.'}
-            </div>
-          )}
-          {openFeed.map((r) => renderRequest(r, 'open'))}
+          {actionable.map((r) => renderRequest(r, 'pay'))}
         </div>
       )}
 

@@ -91,3 +91,25 @@ export const remaining = (r: Request): bigint => r.amount - r.collected;
 export const isOpen = (r: Request): boolean => r.status === 1;
 /** An open request that named nobody — anyone can fulfil it. */
 export const isOpenRequest = (r: Request): boolean => isOpen(r) && r.named === ZERO;
+
+/**
+ * Merge the requests a person was asked for with the open feed into the single
+ * list the Requests tab shows. A request addressed to you by name comes first,
+ * because it is yours to answer; open requests anyone can settle follow, newest
+ * first. Deduplicated by id, since a request can appear in both.
+ */
+export const mergeActionable = (named: Request[], open: Request[]): Request[] => {
+  const seen = new Set<string>();
+  const out: Request[] = [];
+  for (const r of [...named, ...open]) {
+    const k = r.id.toString();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out.sort((a, b) => {
+    const ao = a.named === ZERO ? 1 : 0;
+    const bo = b.named === ZERO ? 1 : 0;
+    return ao !== bo ? ao - bo : Number(b.id - a.id);
+  });
+};

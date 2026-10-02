@@ -1,0 +1,14 @@
+Merge To Pay and Open into one Requests tab
+
+Both tabs answered the same question - requests I can act on - so separating
+them by request type rather than by action was the wrong cut. Four tabs now:
+
+  Send | Request | Requests | History
+
+mergeActionable() lives in pay.ts rather than inline in the component, because
+the ordering is the part worth testing: requests naming you come first, since
+those are the ones you can answer or decline; open requests anyone can settle
+follow, newest first. Deduplicated by id, since a request can arrive in both
+feeds. The badge counts the merged list.
+
+18 frontend tests (4 new for the merge), typecheck clean.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   usdc, fmtUsdc, short, STATUS, DAY, ZERO,
-  isOpen, isOpenRequest, remaining,
+  isOpen, isOpenRequest, remaining, mergeActionable,
   type Request,
 } from './pay';
 
@@ -99,5 +99,29 @@ describe('Declined status', () => {
 
   it('an open request is still open', () => {
     expect(isOpen(request({ status: 1 }))).toBe(true);
+  });
+});
+
+describe('merging named and open requests into one list', () => {
+  const ZERO = '0x0000000000000000000000000000000000000000';
+
+  it('puts named requests before open ones', () => {
+    const out = mergeActionable([request({ id: 1n })], [request({ id: 2n, named: ZERO })]);
+    expect(out.map((r) => r.id)).toEqual([1n, 2n]);
+  });
+
+  it('keeps newest first within each group', () => {
+    const out = mergeActionable([request({ id: 1n }), request({ id: 5n })], [request({ id: 9n, named: ZERO })]);
+    expect(out.map((r) => r.id)).toEqual([5n, 1n, 9n]);
+  });
+
+  it('keeps one entry when a request appears in both lists', () => {
+    const r = request({ id: 7n });
+    const out = mergeActionable([r, r], []);
+    expect(out.length).toBe(1);
+  });
+
+  it('handles an empty list', () => {
+    expect(mergeActionable([], [])).toEqual([]);
   });
 });
