@@ -30,6 +30,7 @@ const REQUEST_ABI_SIG = [
 const ERC20_ABI_SIG = [
   'function balanceOf(address) view returns (uint256)',
   'function approve(address,uint256) returns (bool)',
+  'function transfer(address,uint256) returns (bool)',
 ] as const;
 
 export const REQUEST_ABI = parseAbi(REQUEST_ABI_SIG);
@@ -54,3 +55,9 @@ export const usdc = (v: bigint): number => Number(v) / 1e6;
 export const short = (a: string): string => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 export const DAY = 86_400;
+
+/** Format a USDC amount for display: 4 dp, trailing zeros trimmed. */
+export const fmtUsdc = (v: bigint): string => {
+  const s = (Number(v) / 1e6).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  return s;
+};

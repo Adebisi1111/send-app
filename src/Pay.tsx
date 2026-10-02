@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount, useConnect, useWriteContract } from 'wagmi';
 import { createPublicClient, http, zeroAddress } from 'viem';
 import { waitForTransactionReceipt } from 'viem/actions';
 import { arcMainnet } from './chain';
 import {
   USDC, REGISTRY, REQUESTS, REGISTRY_ABI, REQUEST_ABI, ERC20_ABI,
-  STATUS, usdc, short, DAY, type Request,
+  STATUS, usdc, fmtUsdc, short, DAY, type Request,
 } from './pay';
 
 const client = createPublicClient({ chain: arcMainnet, transport: http() });
@@ -94,6 +94,30 @@ export default function Pay() {
 
   const [tab, setTab] = useState<'ask' | 'send' | 'inbox'>('ask');
 
+  // Balances and the connected account's username. Both are read on connect
+  // and refreshed after anything that moves money.
+  const [balance, setBalance] = useState<bigint | null>(null);
+  const [myName, setMyName] = useState<string | null>(null);
+  const [inboxPending, setInboxPending] = useState<Set<bigint>>(new Set());
+  const [step, setStep] = useState<'welcome' | 'claim' | 'ready'>('claim');
+
+  useEffect(() => {
+    if (!address) return;
+    (async () => {
+      await refresh();
+      try {
+        const who = (await client.readContract({
+          address: REGISTRY, abi: REGISTRY_ABI, functionName: 'usernameOf', args: [address],
+        })) as unknown as string;
+        // No username yet means this is a first run — walk them through claiming one.
+        setStep(who && who.length ? 'ready' : 'welcome');
+      } catch {
+        setStep('welcome');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address]);
+
   // claim a username
   const [name, setName] = useState('');
   const [nameState, setNameState] = useState<{ taken?: boolean; mine?: boolean; done?: boolean }>({});
@@ -113,6 +137,22 @@ export default function Pay() {
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [inbox, setInbox] = useState<Request[]>([]);
+
+  /** Re-read balance, gas and username. Safe to call after any tx. */
+  const refresh = async () => {
+    if (!address) return;
+    try {
+      const [usdcBal, who] = await Promise.all([
+        client.readContract({ address: USDC, abi: ERC20_ABI, functionName: 'balanceOf', args: [address] }),
+        client.readContract({ address: REGISTRY, abi: REGISTRY_ABI, functionName: 'usernameOf', args: [address] }),
+      ]);
+      setBalance(usdcBal);
+      const u = (who as unknown as string) ?? '';
+      setMyName(u.length ? u : null);
+    } catch {
+      setBalance(null);
+    }
+  };
 
   const run = async (label: string, fn: () => Promise<string>) => {
     setBusy(label); setErr(null); setNote(null);
@@ -136,6 +176,9 @@ export default function Pay() {
       const h = await writeContractAsync({ address: REGISTRY, abi: REGISTRY_ABI, functionName: 'register', args: [name.toLowerCase()] });
       await waitForTransactionReceipt(client, { hash: h });
       setNameState({ done: true });
+      setMyName(name.toLowerCase());
+      await refresh();
+      setStep('ready');
       return `You are now @${name.toLowerCase()}`;
     });
 
@@ -158,7 +201,14 @@ export default function Pay() {
         args: [to.replace(/^@/, '').toLowerCase(), purpose.trim(), units, BigInt(Math.floor(Date.now() / 1000) + 7 * DAY), auto],
       });
       await waitForTransactionReceipt(client, { hash: h });
-      return `Requested ${amount} USDC from @${to.replace(/^@/, '').toLowerCase()}`;
+      await refresh();
+      const link = `${location.origin}/?r=${h}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        return `Requested ${amount} USDC from @${to.replace(/^@/, '').toLowerCase()} — link copied, send it anywhere`;
+      } catch {
+        return `Requested ${amount} USDC from @${to.replace(/^@/, '').toLowerCase()}`;
+      }
     });
 
   const send = () =>
@@ -170,6 +220,7 @@ export default function Pay() {
         functionName: 'transfer', args: [lookup, units],
       });
       await waitForTransactionReceipt(client, { hash: h });
+      await refresh();
       return `Sent ${sendAmt} USDC to @${sendTo.replace(/^@/, '').toLowerCase()}`;
     });
 
@@ -178,12 +229,75 @@ export default function Pay() {
     setLookup(!who || who === zeroAddress ? null : who);
   };
 
+  // Watch for requests the user does not know about yet. Polls the chain so a
+  // new request surfaces without opening the app.
+  const seen = useRef<Set<string>>(new Set());
+  const [alert, setAlert] = useState<{ title: string; body: string } | null>(null);
+  const [wantNotify, setWantNotify] = useState(
+    () => typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default',
+  );
+
+  // A request link dropped into the app goes straight to the Inbox.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has('r')) setTab('inbox');
+  }, []);
+
+  const poll = useCallback(async () => {
+    if (!address) return;
+    try {
+      const ids = await readInbox(address);
+      const pending = new Set<bigint>();
+      const fresh: bigint[] = [];
+      for (const id of ids) {
+        const r = await readRequest(id);
+        if (!r || r.status !== 1) continue;
+        pending.add(id);
+        // First load just records what exists; later polls report what is new.
+        if (seen.current.size && !seen.current.has(id.toString())) fresh.push(id);
+      }
+      if (seen.current.size) {
+        const onlyNew = fresh.filter((id) => pending.has(id));
+        if (onlyNew.length) {
+          const newest = onlyNew[onlyNew.length - 1];
+          const r = await readRequest(newest);
+          if (r) {
+            setAlert({
+              title: `${fmtUsdc(r.amount)} USDC requested`,
+              body: r.purpose || `From @${r.username}`,
+            });
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification(`${fmtUsdc(r.amount)} USDC requested`, {
+                body: r.purpose || `From @${r.username}`,
+                tag: `send-${newest}`,
+              });
+            }
+          }
+        }
+      }
+      ids.forEach((id) => seen.current.add(id.toString()));
+      setInboxPending(pending);
+    } catch {
+      /* transient RPC failure — retry on the next tick */
+    }
+  }, [address]);
+
+  // Poll while the tab is visible; pause when it is not.
+  useEffect(() => {
+    if (step !== 'ready') return;
+    void poll();
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void poll(); }, 12_000);
+    const onVis = () => { if (document.visibilityState === 'visible') void poll(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  }, [step, poll]);
+
   const loadInbox = async () => {
     if (!address) return;
     setBusy('Loading…');
     try {
       const ids = await readInbox(address);
       const rs = await Promise.all(ids.map(readRequest));
+      ids.forEach((id) => seen.current.add(id.toString()));
       const live = rs.filter((r): r is Request => !!r);
       // Pending first — a request you can act on must not sit below settled
       // history — then most recent first within each group.
@@ -201,6 +315,7 @@ export default function Pay() {
       const h = await writeContractAsync({ address: REQUESTS, abi: REQUEST_ABI, functionName: 'release', args: [id] });
       await waitForTransactionReceipt(client, { hash: h });
       await loadInbox();
+      await refresh();
       return `Released request #${id}`;
     });
 
@@ -235,6 +350,93 @@ export default function Pay() {
     );
   }
 
+  // ------------------------------------------------------------ onboarding
+
+  if (step !== 'ready') {
+    const suggestions = ['adeeze', 'chidi', 'tunde', 'ngozi', 'ife', 'bola'];
+    return (
+      <div className="shell">
+        <header className="top">
+          <div className="brand">
+            <div className="mark">S</div>
+            <span className="brand-name">Send</span>
+          </div>
+          <div className="pill"><span className="dot" />Arc mainnet</div>
+        </header>
+
+        <div className="steps">
+          <div className="step step-done">
+            <span className="step-n">✓</span>
+            <span>Connect wallet</span>
+          </div>
+          <div className={`step${step === 'claim' ? ' step-now' : ''}`}>
+            <span className="step-n">{step === 'claim' ? '2' : '3'}</span>
+            <span>Claim a username</span>
+          </div>
+          <div className="step">
+            <span className="step-n">3</span>
+            <span>Send or request USDC</span>
+          </div>
+        </div>
+
+        {balance !== null && (
+          <div className="card bal-card">
+            <div>
+              <div className="bal-amt big">{fmtUsdc(balance)} <span className="bal-unit">USDC</span></div>
+              <div className="hint" style={{ marginTop: 4 }}>{short(address!)}</div>
+            </div>
+          </div>
+        )}
+
+        {step === 'welcome' && (
+          <div className="card">
+            <h2 className="card-h">Welcome to Send</h2>
+            <p className="card-p">
+              Pay anyone on Arc by username — no addresses to copy, no wrong-network errors.
+              USDC is the gas token here, so sending costs nothing in the network fee.
+            </p>
+            <ul className="feat">
+              <li>Claim a username once, then be paid by it</li>
+              <li>Request USDC with a reason, release with one tap</li>
+              <li>Cancel any time and your money comes straight back</li>
+            </ul>
+            <button className="btn btn-lg btn-full" onClick={() => setStep('claim')}>
+              Get my username →
+            </button>
+          </div>
+        )}
+
+        {step === 'claim' && (
+          <div className="card">
+            <h2 className="card-h">Pick a username</h2>
+            <p className="card-p">This is how people will pay you. It is permanent.</p>
+            <div className="row">
+              <input className="field" id="claim-name" placeholder="yourname" value={name} maxLength={20}
+                onChange={(e) => { setName(e.target.value.replace(/[^a-zA-Z0-9_]/g, '')); setNameState({}); }} />
+              <button onClick={claim} disabled={!!busy || !name} className="btn">
+                {busy ?? (nameState.done ? 'Claimed' : 'Claim')}
+              </button>
+            </div>
+            {nameState.taken && <div className="err-text">That name is taken.</div>}
+
+            <div className="label label-sp">Or try one of these</div>
+            <div className="chips">
+              {suggestions.map((s) => (
+                <button key={s} className={`chip${name === s ? ' chip-on' : ''}`}
+                  onClick={() => { setName(s); setNameState({}); }}>@{s}</button>
+              ))}
+            </div>
+            <p className="hint">
+              One transaction on Arc mainnet. Your USDC never touches us.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------- main app
+
   return (
     <div className="shell">
       <header className="top">
@@ -242,11 +444,29 @@ export default function Pay() {
           <div className="mark">S</div>
           <span className="brand-name">Send</span>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div className="pill"><span className="dot" />Arc mainnet</div>
-          <div className="wallet" style={{ marginTop: 6 }}>{short(address!)}</div>
+        <div className="acct">
+          <div className="bal">
+            <span className="bal-amt">{balance === null ? '—' : fmtUsdc(balance)}</span>
+            <span className="bal-unit">USDC</span>
+          </div>
+          <div className="wallet">
+            {myName ? `@${myName}` : short(address!)}
+          </div>
         </div>
       </header>
+
+      {wantNotify && (
+        <div className="card notify-card">
+          <div>
+            <div className="card-h sm">Get notified</div>
+            <p className="card-p sm">Allow notifications so a request reaches you without opening this app.</p>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={async () => {
+            await Notification.requestPermission();
+            setWantNotify(false);
+          }}>Allow</button>
+        </div>
+      )}
 
       <div className="tabs" role="tablist">
         {([['ask', 'Ask'], ['send', 'Send'], ['inbox', 'Inbox']] as const).map(([k, l]) => (
@@ -254,6 +474,7 @@ export default function Pay() {
             onClick={() => { setTab(k); if (k === 'inbox') loadInbox(); }}
             className={`tab${tab === k ? ' tab-on' : ''}`}>
             {l}
+            {k === 'inbox' && inboxPending.size > 0 && <span className="badge-n">{inboxPending.size}</span>}
           </button>
         ))}
       </div>
@@ -261,19 +482,21 @@ export default function Pay() {
       {err && <div className="msg msg-err">{err}</div>}
       {note && <div className="msg msg-ok">{note}</div>}
 
+      {alert && (
+        <div className="toast" role="status">
+          <div className="toast-bell">🔔</div>
+          <div className="toast-body">
+            <div className="toast-t">{alert.title}</div>
+            <div className="toast-m">{alert.body}</div>
+          </div>
+          <button className="toast-x" onClick={() => setAlert(null)} aria-label="Dismiss">×</button>
+          <button className="toast-go" onClick={() => { setTab('inbox'); setAlert(null); }}>View</button>
+        </div>
+      )}
+
       {tab === 'ask' && (
         <div className="card">
-          <label className="label" htmlFor="claim-name">Your username</label>
-          <div className="row">
-            <input id="claim-name" className="field" placeholder="adaeze" value={name}
-              onChange={(e) => { setName(e.target.value); setNameState({}); }} />
-            <button onClick={claim} disabled={!!busy || !name} className="btn btn-ghost">
-              {busy ?? (nameState.done ? 'Claimed' : 'Claim')}
-            </button>
-          </div>
-          {nameState.taken && <div className="err-text">That name is taken.</div>}
-
-          <label className="label label-sp" htmlFor="ask-to">Ask someone for USDC</label>
+          <label className="label" htmlFor="ask-to">Ask someone for USDC</label>
           <input id="ask-to" className="field" placeholder="username" value={to} onChange={(e) => setTo(e.target.value)} />
           <input id="ask-amt" className="field" placeholder="amount (USDC)" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
           <input id="ask-why" className="field" placeholder="what is it for?" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
