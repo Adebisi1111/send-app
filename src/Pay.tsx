@@ -110,7 +110,6 @@ export default function Pay() {
   const [sendNote, setSendNote] = useState('');
   const [sendPreview, setSendPreview] = useState<`0x${string}` | null | 'unknown'>(null);
   const [purpose, setPurpose] = useState('');
-  const [openToAnyone, setOpenToAnyone] = useState(false);
 
   // paying
   const [partial, setPartial] = useState('');
@@ -375,23 +374,18 @@ export default function Pay() {
       let h: `0x${string}`;
       let target = '';
 
-      if (openToAnyone) {
-        h = await writeContractAsync({
-          address: REQUESTS, abi: REQUEST_ABI, functionName: 'askAnyone',
-          args: [purpose.trim(), units, expiry],
-        });
-        target = 'anyone with the link';
-      } else {
-        const handle = to.replace(/^@/, '').toLowerCase();
-        if (!handle) throw new Error('Who are you asking? Pick a name, or open it to anyone');
-        const who = await resolveName(handle);
-        if (!who || who === zeroAddress) throw new Error(`No one is @${handle}`);
-        h = await writeContractAsync({
-          address: REQUESTS, abi: REQUEST_ABI, functionName: 'ask',
-          args: [handle, purpose.trim(), units, expiry],
-        });
-        target = `@${handle}`;
-      }
+      // Always ask someone by name. Open requests stay supported on chain, but
+      // the app only creates named ones: a request you can decline needs a
+      // person to decline it.
+      const handle = to.replace(/^@/, '').toLowerCase();
+      if (!handle) throw new Error('Who are you asking? Enter their username');
+      const who = await resolveName(handle);
+      if (!who || who === zeroAddress) throw new Error(`No one is @${handle}`);
+      h = await writeContractAsync({
+        address: REQUESTS, abi: REQUEST_ABI, functionName: 'ask',
+        args: [handle, purpose.trim(), units, expiry],
+      });
+      target = `@${handle}`;
 
       await waitForTransactionReceipt(client, { hash: h });
       const link = `${location.origin}/?r=${h}`;
@@ -773,7 +767,7 @@ export default function Pay() {
         {([
           ['send', 'Send'],
           ['ask', 'Request'],
-          ['topay', 'Requests'],
+          ['topay', 'Pending'],
           ['mine', 'History'],
         ] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`tab${tab === k ? ' tab-on' : ''}`}
@@ -821,24 +815,8 @@ export default function Pay() {
       {tab === 'ask' && (
         <div className="card">
           <label className="label" htmlFor="ask-to">Ask someone for USDC</label>
-          <div className="seg" role="radiogroup">
-            <button className={`seg-b${!openToAnyone ? ' seg-on' : ''}`} onClick={() => setOpenToAnyone(false)}>
-              Someone by name
-            </button>
-            <button className={`seg-b${openToAnyone ? ' seg-on' : ''}`} onClick={() => setOpenToAnyone(true)}>
-              Open to anyone
-            </button>
-          </div>
-
-          {!openToAnyone ? (
-            <input id="ask-to" className="field" style={{ marginTop: 14 }} placeholder="username, e.g. kwame"
-              value={to} onChange={(e) => setTo(e.target.value)} />
-          ) : (
-            <div className="req-note" style={{ marginTop: 14 }}>
-              No name needed. Anyone who has the link can settle this — useful for a group
-              gift where several people chip in.
-            </div>
-          )}
+          <input id="ask-to" className="field" placeholder="username, e.g. kwame"
+            value={to} onChange={(e) => setTo(e.target.value)} />
 
           <input id="ask-amt" className="field" placeholder="amount (USDC)" inputMode="decimal"
             value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -860,7 +838,7 @@ export default function Pay() {
           {actionable.length === 0 && (
             <div className="card empty">
               <div className="empty-mark">◎</div>
-              {busy ?? 'Nothing needs your attention. Open requests anyone can settle will show up here.'}
+              {busy ?? 'Nothing pending. Requests other people make of you show up here.'}
             </div>
           )}
           {actionable.map((r) => renderRequest(r, 'pay'))}
