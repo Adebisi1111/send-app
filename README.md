@@ -63,7 +63,10 @@ Request takes a username, an amount and a purpose. Asking costs about half a
 cent and locks nothing — the balance does not move, because no escrow exists.
 
 Pending lists what you might pay or decline. A request naming you shows **Pay**
-and **Decline**. History is a record and offers no controls.
+and **Decline**. History is a record and offers no controls. It covers both kinds of movement: a
+plain Send, which is a direct ERC-20 transfer with no request behind it, and a
+request that was asked, paid or declined. Sends are read from `Transfer` logs
+for the connected account, so they show up on both sides.
 
 Settling uses an exact allowance: the payer approves precisely the amount being
 settled, never an open-ended one.
@@ -88,11 +91,11 @@ transactions and reading the resulting chain state:
   reverted and the name still resolved to its real owner, while a transfer to a
   name-less address in the same block succeeded
 
-`125` contract tests and `36` frontend tests:
+`125` contract tests and `47` frontend tests:
 
 ```bash
 forge test        # 125 passing
-npx vitest run    # 36 passing
+npx vitest run    # 47 passing
 ```
 
 The contract suite covers what is easy to get wrong: that asking escrows

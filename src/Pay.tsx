@@ -10,6 +10,7 @@ import {
   RPC_URL,
   type Request,
 } from './pay';
+import { fetchDirectTransfers, type DirectTransfer } from './transfers';
 
 const client = createPublicClient({ chain: arc, transport: http(RPC_URL) });
 
@@ -128,6 +129,7 @@ export default function Pay() {
   const [openFeed, setOpenFeed] = useState<Request[]>([]);
   /** Everything the connected account has touched, in either direction. */
   const [history, setHistory] = useState<Request[]>([]);
+  const [direct, setDirect] = useState<DirectTransfer[]>([]);
   /**
    * Requests the account can act on, in one list: addressed to them by name,
    * plus open requests anyone can settle. Two tabs for one job was the
@@ -326,6 +328,15 @@ export default function Pay() {
       setHistory(all.sort((a, b) => Number(b.id - a.id)));
     } catch {
       /* transient RPC failure — retried on the next tick */
+    }
+
+    // A direct Send is a plain ERC-20 transfer, so it has no request id and the
+    // contract views above cannot see it. Without this, sending someone USDC
+    // left no trace in History at all.
+    try {
+      setDirect(await fetchDirectTransfers(address));
+    } catch {
+      /* rate limited or the node refused the range; requests still show */
     }
   }, [address]);
 
@@ -698,6 +709,24 @@ export default function Pay() {
 
   // ------------------------------------------------------------ main app
 
+  /** A plain Send, which the contract cannot record because there is no request. */
+  const renderDirect = (t: DirectTransfer) => (
+    <div key={t.hash} className="card">
+      <div className="req-head">
+        <span className="req-amt">{fmtUsdc(BigInt(Math.round(t.amount * 1e6)))} USDC</span>
+        <span className="badge badge-gone">{t.outgoing ? 'Sent' : 'Received'}</span>
+      </div>
+      <div className="req-why">{t.outgoing ? 'Direct send' : 'Received directly'}</div>
+      <div className="req-from">
+        {t.outgoing ? <>sent to {short(t.counterparty)}</> : <>received from {short(t.counterparty)}</>}
+      </div>
+      <div className="req-note">
+        Straight USDC transfer{t.outgoing ? ' from your wallet' : ' into your wallet'} — no request involved.{' '}
+        <a href={`https://arc.etherscan.io/tx/${t.hash}`} target="_blank" rel="noreferrer">view</a>
+      </div>
+    </div>
+  );
+
   const renderRequest = (r: Request, mode: 'pay' | 'mine' | 'history') => {
     const left = remaining(r);
     const open = isOpen(r);
@@ -940,13 +969,14 @@ export default function Pay() {
 
       {tab === 'mine' && (
         <div className="stack">
-          {history.length === 0 && (
+          {history.length === 0 && direct.length === 0 && (
             <div className="card empty">
               <div className="empty-mark">◎</div>
               {busy ?? 'Nothing here yet. Send someone USDC, or ask them for some.'}
             </div>
           )}
           {history.map((r) => renderRequest(r, 'history'))}
+          {direct.map((t) => renderDirect(t))}
         </div>
       )}
 

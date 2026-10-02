@@ -35,3 +35,7 @@ deploy-request.sh
 estimate.sh
 verify-mainnet.sh
 verify-fix2-mainnet.sh
+trace-usdc.py
+trace-tx.py
+probe-logs.py
+prove-transfers.py
