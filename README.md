@@ -56,12 +56,16 @@ to the original recipient. There is a test for exactly that.
 
 ## Status
 
-Deployed on **Arc testnet**.
+**Deployed on Arc mainnet** (chain 5042).
 
 | contract         | address                                      |
 | ---------------- | -------------------------------------------- |
-| UsernameRegistry | `0x9e15EEF785340AAECA386d3099404D5c50FA7CF5` |
-| PaymentRequest   | `0x5A531DC4E63EbB98aE8c44411122A54808a35e5a` |
+| UsernameRegistry | `0x71508725F355cf017B42Bccd878cff3c8a0bE641` |
+| PaymentRequest   | `0x285223c45050D7c93b8fF93Cc972580D2DD1f2EF` |
+
+Verified live on mainnet: `mainnet-proof.mjs` claims a username, creates a request
+with a purpose, releases it in one call, cancels another, and asserts the balances
+moved and nothing is stranded in the contract.
 
 24 contract tests, 5 frontend tests.
 
@@ -69,6 +73,19 @@ Deployed on **Arc testnet**.
 forge test        # 24 passing
 npx vitest run    # 5 passing
 ```
+
+## Running the mainnet proof
+
+`mainnet-proof.mjs` needs a funded key on disk. Point it at one:
+
+```bash
+REGISTRY=0x71508725F355cf017B42Bccd878cff3c8a0bE641 \
+REQUESTS=0x285223c45050D7c93b8fF93Cc972580D2DD1f2EF \
+node mainnet-proof.mjs
+```
+
+It reads the key from `/home/administrator/.arc-deployer.key`, which is not in
+this repo. Point that path at your own key file, or edit it.
 
 ## Running the frontend
 
@@ -82,7 +99,7 @@ pointing it at another network.
 
 ## Live
 
-Testnet build: see the deployed Pages site. Mainnet deployment is the open item.
+https://adebisi1111.github.io/send-app — connected to Arc mainnet, pointed at the live contracts above.
 
 ## Layout
 

@@ -5,12 +5,12 @@ import App from './Pay.tsx'
 import { WagmiProvider, createConfig, http } from 'wagmi'
 import { injected } from 'wagmi/connectors'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { arcTestnet } from './chain.ts'
+import { arcMainnet } from './chain.ts'
 
 const config = createConfig({
-  chains: [arcTestnet],
+  chains: [arcMainnet],
   connectors: [injected()],
-  transports: { [arcTestnet.id]: http() },
+  transports: { [arcMainnet.id]: http() },
 })
 
 const queryClient = new QueryClient()

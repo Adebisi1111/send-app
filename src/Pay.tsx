@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { useAccount, useConnect, useWriteContract } from 'wagmi';
 import { createPublicClient, http, zeroAddress } from 'viem';
 import { waitForTransactionReceipt } from 'viem/actions';
-import { arcTestnet } from './chain';
+import { arcMainnet } from './chain';
 import {
   USDC, REGISTRY, REQUESTS, REGISTRY_ABI, REQUEST_ABI, ERC20_ABI,
   STATUS, usdc, short, DAY, type Request,
 } from './pay';
 
-const client = createPublicClient({ chain: arcTestnet, transport: http() });
+const client = createPublicClient({ chain: arcMainnet, transport: http() });
 
 // ---------------------------------------------------------------- helpers
 
@@ -199,7 +199,7 @@ export default function Pay() {
   return (
     <div style={{ fontFamily: 'ui-sans-serif, system-ui', maxWidth: 520, margin: '0 auto', padding: 20 }}>
       <header style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, letterSpacing: 1, color: '#6d7787', textTransform: 'uppercase' }}>Arc testnet</div>
+        <div style={{ fontSize: 11, letterSpacing: 1, color: '#6d7787', textTransform: 'uppercase' }}>Arc mainnet</div>
         <h1 style={{ margin: '4px 0 0', fontSize: 24 }}>Send</h1>
         <div style={{ fontSize: 13, color: '#6d7787', marginTop: 4 }}>{short(address!)}</div>
       </header>
