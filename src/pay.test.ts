@@ -195,6 +195,26 @@ describe('turning wallet errors into something actionable', () => {
   it('falls back when there is no message at all', () => {
     expect(explain({})).toContain('Try again');
   });
+
+  // The two guards the audit added. Without these the user sees a bare
+  // custom-error revert and has no idea what happened or what to do.
+  it('explains the self-settle guard in plain words', () => {
+    const msg = explain(err('CannotPayOwnRequest(1)'));
+    expect(msg).toContain('your own request');
+    expect(msg).not.toContain('CannotPayOwnRequest');
+  });
+
+  it('explains the username-clobbering guard', () => {
+    expect(explain(err('AddressAlreadyHasUsername(0xabc, "alice")')))
+      .toContain('already holds a username');
+  });
+
+  it('names the remaining contract guards users can hit', () => {
+    expect(explain(err('AlreadyResponded(3)'))).toContain('already answered');
+    expect(explain(err('NothingToCollect(3, 0)'))).toContain('already fully paid');
+    expect(explain(err('ExpiryPassed(2)'))).toContain('expired');
+    expect(explain(err('NotNamedPayer(2, 0xabc)'))).toContain('named on this request');
+  });
 });
 
 describe('address comparison across casing', () => {

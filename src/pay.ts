@@ -122,6 +122,26 @@ export const explain = (e: unknown): string => {
   if (/insufficient funds for (gas|gas \* price)|gas required|intrinsic gas too low/i.test(s)) {
     return 'Not enough USDC in this wallet to cover the fee. Arc uses USDC for gas, so the wallet needs a small balance first.';
   }
+  // The two guards added by the audit. Both surface as a bare custom-error
+  // revert otherwise, which tells the user nothing about what to do next.
+  if (/CannotPayOwnRequest/i.test(s)) {
+    return 'This is your own request, so you cannot pay it. Wait for the person you asked, or close it.';
+  }
+  if (/AddressAlreadyHasUsername/i.test(s)) {
+    return 'That address already holds a username, so it cannot take another.';
+  }
+  if (/NothingToCollect/i.test(s)) {
+    return 'This request is already fully paid.';
+  }
+  if (/AlreadyResponded/i.test(s)) {
+    return 'You have already answered this request - paid it or declined it.';
+  }
+  if (/NotNamedPayer/i.test(s)) {
+    return 'Only the person named on this request can answer it.';
+  }
+  if (/ExpiryPassed/i.test(s)) {
+    return 'This request has expired.';
+  }
   if (/already taken|already registered|taken/i.test(s)) {
     return 'That username is already taken. Try another.';
   }
