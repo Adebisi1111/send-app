@@ -119,7 +119,6 @@ export default function Pay() {
   const [purpose, setPurpose] = useState('');
 
   // paying
-  const [partial, setPartial] = useState('');
 
   // username
   const [name, setName] = useState('');
@@ -478,12 +477,13 @@ export default function Pay() {
       }
     });
 
-  const settle = (r: Request, full: boolean) =>
-    run(full ? 'Paying…' : 'Paying…', async () => {
+  /** Settle a request in full. Part payments are supported by the contract
+   *  but not offered; see the note where the control used to sit. */
+  const settle = (r: Request) =>
+    run('Paying…', async () => {
       if (!address) throw new Error('Connect a wallet first');
-      const left = remaining(r);
-      const amt = full ? left : BigInt(Math.round(parseFloat(partial) * 1e6));
-      if (amt <= 0n || amt > left) throw new Error(`Enter an amount up to ${fmtUsdc(left)}`);
+      const amt = remaining(r);
+      if (amt <= 0n) throw new Error('Nothing left to pay');
 
       const approve = await writeContractAsync({
         address: USDC, abi: ERC20_ABI, functionName: 'approve', args: [REQUESTS, amt],
@@ -660,9 +660,9 @@ export default function Pay() {
               you — either way the money goes straight between wallets.
             </p>
             <ul className="feat">
-              <li>Send by username, no address needed</li>
-              <li>Ask anyone for USDC, or leave a request open to whoever finds it</li>
-              <li>Several people can chip into the same request</li>
+              <li>Send to anyone by username, no address needed</li>
+              <li>Ask someone for USDC against a stated purpose</li>
+              <li>They accept or decline — your choice either way</li>
               <li>Nothing is escrowed, so nothing can get stuck</li>
             </ul>
             <button className="btn btn-lg btn-full" onClick={() => setStep('claim')}>
@@ -737,7 +737,7 @@ export default function Pay() {
             {!sameAddress(r.requester, address) && (
               <>
                 <div className="req-actions">
-                  <button onClick={() => settle(r, true)} disabled={!!busy} className="btn">
+                  <button onClick={() => settle(r)} disabled={!!busy} className="btn">
                     {busy ?? `Pay ${fmtUsdc(left)} USDC`}
                   </button>
                   {sameAddress(r.named, address) && (
@@ -746,15 +746,10 @@ export default function Pay() {
                     </button>
                   )}
                 </div>
-                <details className="req-part">
-                  <summary>Pay part of it</summary>
-                  <div className="row">
-                    <input className="field" placeholder={`up to ${fmtUsdc(left)}`} inputMode="decimal"
-                      value={partial} onChange={(e) => setPartial(e.target.value)} />
-                    <button className="btn btn-ghost" disabled={!!busy || !partial}
-                      onClick={() => settle(r, false)}>Pay</button>
-                  </div>
-                </details>
+                {/* Part payments stay supported on chain but are not offered:
+                    the flow is one person accepting one amount. Restore by
+                    un-commenting; pay(id, amount) and close() already handle a
+                    partly collected request. */}
               </>
             )}
             {sameAddress(r.requester, address) && (
