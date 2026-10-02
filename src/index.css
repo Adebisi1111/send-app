@@ -513,6 +513,44 @@ body {
 }
 
 /* ============================================================
+   wrong network
+   ============================================================ */
+.net-warn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 15px;
+  margin-bottom: 16px;
+  border-radius: var(--r);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-line);
+}
+
+.net-t {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--danger);
+  margin-bottom: 2px;
+}
+
+.net-m {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.pill-bad {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
+.pill-bad .dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgba(255, 154, 168, 0.16);
+}
+
+/* ============================================================
    account + balance
    ============================================================ */
 .acct {
@@ -843,6 +881,20 @@ body {
 
 .connect .btn + .btn {
   margin-top: 10px;
+}
+
+.net-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.net-copy {
+  margin: 0 0 9px;
+}
+
+.net-copy:last-child {
+  margin-bottom: 0;
 }
 
 .connect-note {

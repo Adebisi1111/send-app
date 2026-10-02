@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAccount, useConnect, useWriteContract } from 'wagmi';
+import { useAccount, useChainId, useConnect, useSwitchChain, useWriteContract } from 'wagmi';
 import { createPublicClient, http, zeroAddress } from 'viem';
 import { waitForTransactionReceipt } from 'viem/actions';
 import { arcMainnet } from './chain';
@@ -90,6 +90,79 @@ const badgeClass = (status: number): string =>
 export default function Pay() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
+  // A wallet on any other chain cannot do anything here, so detect it and offer
+  // a one-tap switch rather than letting reads fail silently.
+  const wagmiChainId = useChainId();
+  const { switchChain, isPending: switching } = useSwitchChain();
+  // Read the chain straight from the wallet. wagmi's useChainId reflects the
+  // connector's view, which does not always match what the wallet is actually
+  // on — and a mismatch here means every read silently returns nothing.
+  const [walletChain, setWalletChain] = useState<number | null>(null);
+
+  const readChain = useCallback(async () => {
+    const w = window as Window & { ethereum?: { request: (a: unknown) => Promise<unknown> } };
+    if (!w.ethereum?.request) return;
+    try {
+      const hex = (await w.ethereum.request({ method: 'eth_chainId' })) as string;
+      setWalletChain(Number(hex));
+    } catch {
+      /* wallet refused; fall back to wagmi's view */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) { setWalletChain(null); return; }
+    void readChain();
+    const w = window as Window & {
+      ethereum?: {
+        on?: (e: string, f: (...a: unknown[]) => void) => void;
+        removeListener?: (e: string, f: (...a: unknown[]) => void) => void;
+      };
+    };
+    // Keep stable references: removeListener compares identity, so an inline
+    // arrow here would detach the listener on the very next render.
+    const onChain = () => void readChain();
+    const onAccounts = () => void readChain();
+    w.ethereum?.on?.('chainChanged', onChain);
+    w.ethereum?.on?.('accountsChanged', onAccounts);
+    return () => {
+      w.ethereum?.removeListener?.('chainChanged', onChain);
+      w.ethereum?.removeListener?.('accountsChanged', onAccounts);
+    };
+  }, [isConnected, readChain]);
+
+  const chainId = walletChain ?? wagmiChainId;
+  const wrongChain = isConnected && chainId !== arcMainnet.id;
+
+  /** Ask the wallet to move to Arc. Falls back to wagmi if the wallet ignores us. */
+  const switchToArc = async () => {
+    const w = window as Window & {
+      ethereum?: { request: (a: unknown) => Promise<unknown> };
+    };
+    try {
+      await w.ethereum?.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x13b2' }],
+      });
+    } catch (e: unknown) {
+      // 4902 = chain not added yet. Offer to add it, which most wallets accept.
+      const code = (e as { code?: number })?.code;
+      if (code === 4902 && w.ethereum?.request) {
+        await w.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: '0x13b2',
+            chainName: 'Arc',
+            nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+            rpcUrls: ['https://rpc.mainnet.arc.io'],
+            blockExplorerUrls: ['https://explorer.arc.io'],
+          }],
+        }).catch(() => { /* user declined */ });
+      }
+    }
+    await readChain();
+    void switchChain({ chainId: arcMainnet.id });
+  };
   const { writeContractAsync } = useWriteContract();
 
   const [tab, setTab] = useState<'ask' | 'send' | 'inbox'>('ask');
@@ -342,8 +415,17 @@ export default function Pay() {
             </button>
           ))}
           <div className="connect-note">
-            Non-custodial. Your USDC sits in the request contract, never with us, and
-            can be returned to you at any point before you release it.
+            <div className="net-row">
+              <span className="pill"><span className="dot" />Arc mainnet · chain {arcMainnet.id}</span>
+            </div>
+            <p className="net-copy">
+              If Arc is not in your wallet yet, connecting will offer to add it. You can
+              switch to it any time from the app.
+            </p>
+            <p className="net-copy">
+              Non-custodial. Your USDC sits in the request contract, never with us, and can
+              be returned to you at any point before you release it.
+            </p>
           </div>
         </div>
       </div>
@@ -361,8 +443,23 @@ export default function Pay() {
             <div className="mark">S</div>
             <span className="brand-name">Send</span>
           </div>
-          <div className="pill"><span className="dot" />Arc mainnet</div>
+          <div className={`pill${wrongChain ? ' pill-bad' : ''}`}>
+            <span className="dot" />{wrongChain ? `Chain ${chainId}` : 'Arc mainnet'}
+          </div>
         </header>
+      {wrongChain && (
+        <div className="net-warn" role="alert">
+          <div>
+            <div className="net-t">Wrong network</div>
+            <div className="net-m">
+              You are on chain {chainId}. Send runs on Arc mainnet ({arcMainnet.id}).
+            </div>
+          </div>
+          <button className="btn btn-sm" disabled={switching} onClick={switchToArc}>
+            {switching ? 'Switching…' : 'Switch to Arc'}
+          </button>
+        </div>
+      )}
 
         <div className="steps">
           <div className="step step-done">
@@ -444,6 +541,20 @@ export default function Pay() {
           <div className="mark">S</div>
           <span className="brand-name">Send</span>
         </div>
+      {wrongChain && (
+        <div className="net-warn" role="alert">
+          <div>
+            <div className="net-t">Wrong network</div>
+            <div className="net-m">
+              You are on chain {chainId}. Send runs on Arc mainnet ({arcMainnet.id}).
+            </div>
+          </div>
+          <button className="btn btn-sm" disabled={switching} onClick={switchToArc}>
+            {switching ? 'Switching…' : 'Switch to Arc'}
+          </button>
+        </div>
+      )}
+
         <div className="acct">
           <div className="bal">
             <span className="bal-amt">{balance === null ? '—' : fmtUsdc(balance)}</span>
