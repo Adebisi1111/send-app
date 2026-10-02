@@ -11,8 +11,8 @@ export const RPC_URL = import.meta.env.VITE_RPC ?? 'https://rpc.mainnet.arc.io';
 export const IS_LOCAL = RPC_URL.includes('127.0.0.1');
 
 export const USDC = (import.meta.env.VITE_USDC ?? '0x3600000000000000000000000000000000000000') as `0x${string}`;
-export const REGISTRY = (import.meta.env.VITE_REGISTRY ?? '0x71508725F355cf017B42Bccd878cff3c8a0bE641') as `0x${string}`;
-export const REQUESTS = (import.meta.env.VITE_REQUESTS ?? '0xe71c9a722605ff6541d659a685f968349624e075') as `0x${string}`;
+export const REGISTRY = (import.meta.env.VITE_REGISTRY ?? '0x16aad5a31b750d9cc5641117d335b1ec848a6478') as `0x${string}`;
+export const REQUESTS = (import.meta.env.VITE_REQUESTS ?? '0x55484b461534e065e3e46f13c20c89d26b913339') as `0x${string}`;
 
 const REGISTRY_ABI_SIG = [
   'function register(string) returns (string)',

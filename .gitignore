@@ -31,3 +31,7 @@ deploy-fork.mjs
 # it, so they stay out of the tree to keep the repo to the product itself.
 deploy-fixed.sh
 preflight.sh
+deploy-request.sh
+estimate.sh
+verify-mainnet.sh
+verify-fix2-mainnet.sh

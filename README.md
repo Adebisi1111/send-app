@@ -29,15 +29,24 @@ person named in the request may decline at all.
 
 | contract         | address                                      |
 | ---------------- | -------------------------------------------- |
-| PaymentRequest   | `0xe71c9a722605ff6541d659a685f968349624e075` |
-| UsernameRegistry | `0x71508725F355cf017B42Bccd878cff3c8a0bE641` |
+| PaymentRequest   | `0x55484b461534e065e3e46f13c20c89d26b913339` |
+| UsernameRegistry | `0x16aad5a31b750d9cc5641117d335b1ec848a6478` |
 | USDC             | `0x3600000000000000000000000000000000000000` |
 
-Chain 5042. Two earlier deployments are inert and should be ignored:
+Chain 5042. Earlier deployments are inert and should be ignored:
 `0xc1e3a7b06b39aabb11e639cf5e2dad171a8a712e` (constructor arguments supplied in
-the wrong order) and `0xd8d5e36feba036fe52589cfbe64e210ecf45f492` (built against
-a USDC address that is not a contract on Arc). Both came from mistakes, and both
-are recorded here rather than quietly dropped.
+the wrong order), `0xd8d5e36feba036fe52589cfbe64e210ecf45f492` (built against a
+USDC address that is not a contract on Arc), and the first working pair
+`0x71508725f355cf017b42bccd878cff3c8a0be641` / `0xe71c9a722605ff6541d659a685f968349624e075`,
+superseded after an audit. All four came from mistakes, and all are recorded
+here rather than quietly dropped.
+
+The first working pair is worth explaining, because the flaws were only found by
+asking someone who had not written it. An audit of that bytecode found two real
+bugs: the requester could settle their own request, moving no money while
+marking it Paid, and `transferUsername` could orphan a name permanently. Both are
+fixed above, and both fixes were proven against the deployed bytecode on mainnet
+rather than only in tests.
 
 ## The app
 
@@ -66,16 +75,23 @@ Registration and the request path have been driven end to end:
 ```
 @ife registered   0x48d3cd11…c874   block 23914000
 @adaeze           0x59a8fd5c…1213
-PaymentRequest    nextId 4
 ```
 
-Request #1 is readable on chain and still open. Pay and Decline were exercised
-by hand across two wallets.
+Pay and Decline were exercised by hand across two wallets on the earlier pair.
+On the current contracts both audit fixes were then confirmed by sending real
+transactions and reading the resulting chain state:
 
-`35` contract tests and `36` frontend tests:
+- the requester attempted to settle a request they had made themselves; the
+  transaction reverted and `statusOf` stayed `Open` with `totalSettled` at zero,
+  which is what a pre-fix contract would have shown as `Paid` with phantom value
+- a username was pushed onto an address already holding one; the transaction
+  reverted and the name still resolved to its real owner, while a transfer to a
+  name-less address in the same block succeeded
+
+`125` contract tests and `36` frontend tests:
 
 ```bash
-forge test        # 35 passing
+forge test        # 125 passing
 npx vitest run    # 36 passing
 ```
 
@@ -167,7 +183,7 @@ https://adebisi1111.github.io/send-app
 contracts/
   UsernameRegistry.sol     name -> address
   PaymentRequest.sol       ask / pay / decline / cancel / close
-  test/                    35 tests
+  test/                    125 tests
 src/
   Pay.tsx                  the app
   pay.ts                   addresses, ABIs, formatting, error mapping
