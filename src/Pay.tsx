@@ -63,6 +63,13 @@ async function readRequest(id: bigint): Promise<Request | null> {
   }
 }
 
+async function readOutbox(who: `0x${string}`): Promise<bigint[]> {
+  const ids = await client.readContract({
+    address: REQUESTS, abi: REQUEST_ABI, functionName: 'outbox', args: [who],
+  });
+  return ids as unknown as bigint[];
+}
+
 async function readInbox(who: `0x${string}`): Promise<bigint[]> {
   try {
     const r = await client.readContract({ address: REQUESTS, abi: REQUEST_ABI, functionName: 'inbox', args: [who] });
@@ -165,7 +172,7 @@ export default function Pay() {
   };
   const { writeContractAsync } = useWriteContract();
 
-  const [tab, setTab] = useState<'ask' | 'send' | 'inbox'>('ask');
+  const [tab, setTab] = useState<'ask' | 'send' | 'inbox' | 'sent'>('ask');
 
   // Balances and the connected account's username. Both are read on connect
   // and refreshed after anything that moves money.
@@ -210,6 +217,7 @@ export default function Pay() {
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [inbox, setInbox] = useState<Request[]>([]);
+  const [sent, setSent] = useState<Request[]>([]);
 
   /** Re-read balance, gas and username. Safe to call after any tx. */
   const refresh = async () => {
@@ -275,6 +283,7 @@ export default function Pay() {
       });
       await waitForTransactionReceipt(client, { hash: h });
       await refresh();
+      void loadOutbox();
       const link = `${location.origin}/?r=${h}`;
       try {
         await navigator.clipboard.writeText(link);
@@ -364,6 +373,14 @@ export default function Pay() {
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [step, poll]);
 
+  const loadOutbox = async () => {
+    if (!address) return;
+    const ids = await readOutbox(address);
+    const rs = await Promise.all(ids.map(readRequest));
+    ids.forEach((id) => seen.current.add(id.toString()));
+    setSent(rs.filter((r): r is Request => !!r).reverse());
+  };
+
   const loadInbox = async () => {
     if (!address) return;
     setBusy('Loading…');
@@ -397,6 +414,8 @@ export default function Pay() {
       const h = await writeContractAsync({ address: REQUESTS, abi: REQUEST_ABI, functionName: 'cancel', args: [id] });
       await waitForTransactionReceipt(client, { hash: h });
       await loadInbox();
+      await loadOutbox();
+      await refresh();
       return `Cancelled #${id} — your money is back`;
     });
 
@@ -580,9 +599,13 @@ export default function Pay() {
       )}
 
       <div className="tabs" role="tablist">
-        {([['ask', 'Ask'], ['send', 'Send'], ['inbox', 'Inbox']] as const).map(([k, l]) => (
+        {([['ask', 'Ask'], ['send', 'Send'], ['inbox', 'Inbox'], ['sent', 'Sent']] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k}
-            onClick={() => { setTab(k); if (k === 'inbox') loadInbox(); }}
+            onClick={() => {
+              setTab(k);
+              if (k === 'inbox') loadInbox();
+              if (k === 'sent') loadOutbox();
+            }}
             className={`tab${tab === k ? ' tab-on' : ''}`}>
             {l}
             {k === 'inbox' && inboxPending.size > 0 && <span className="badge-n">{inboxPending.size}</span>}
@@ -647,6 +670,39 @@ export default function Pay() {
         </div>
       )}
 
+      {tab === 'sent' && (
+        <div className="stack">
+          {sent.length === 0 && (
+            <div className="card empty">
+              <div className="empty-mark">◎</div>
+              {busy ?? 'You have not asked anyone for USDC yet.'}
+            </div>
+          )}
+          {sent.map((r) => (
+            <div key={'s' + r.id.toString()} className="card">
+              <div className="req-head">
+                <span className="req-amt">{usdc(r.amount)} USDC</span>
+                <span className={badgeClass(r.status)}>{STATUS[r.status]}</span>
+              </div>
+              <div className="req-why">{r.purpose}</div>
+              <div className="req-from">to {r.username ? `@${r.username}` : short(r.recipient)}</div>
+              {r.status === 1 && (
+                <div className="req-hint">
+                  Held in the contract until @{r.username} accepts. You can take it back any time.
+                </div>
+              )}
+              {r.status === 1 && (
+                <div className="req-actions">
+                  <button onClick={() => cancel(r.id)} disabled={!!busy} className="btn btn-warn">
+                    Cancel &amp; refund me
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {tab === 'inbox' && (
         <div className="stack">
           {inbox.length === 0 && (
@@ -663,13 +719,17 @@ export default function Pay() {
               </div>
               <div className="req-why">{r.purpose}</div>
               <div className="req-from">
-                from {short(r.requester)}{r.autoRelease ? ' · one-tap release' : ''}
+                {r.username ? `@${r.username} · ` : ''}requested {short(r.requester)}
               </div>
               {r.status === 1 && (
+                <div className="req-hint">
+                  This USDC is already held in the contract. Accepting moves it to your wallet.
+                </div>
+              )}
+              {r.status === 1 && (
                 <div className="req-actions">
-                  <button onClick={() => release(r.id)} disabled={!!busy} className="btn">Release</button>
-                  <button onClick={() => cancel(r.id)} disabled={!!busy} className="btn btn-warn">
-                    Cancel &amp; refund
+                  <button onClick={() => release(r.id)} disabled={!!busy} className="btn">
+                    Accept &amp; receive
                   </button>
                 </div>
               )}
