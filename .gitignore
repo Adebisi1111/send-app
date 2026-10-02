@@ -5,3 +5,6 @@ dist
 out/
 cache/
 lib/
+injected-wallet.mjs
+serve-local.mjs
+signer.mjs
