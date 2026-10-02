@@ -3,8 +3,8 @@
 Send USDC to anyone by username on Arc. Ask someone for USDC against a stated
 purpose, and let them pay you — nothing is held in between.
 
-A wallet address is 42 characters and impossible to remember or check. `@adaeze` is
-neither.
+A wallet address is 42 characters and impossible to remember or check. `@adaeze`
+is neither.
 
 ## The model
 
@@ -15,137 +15,147 @@ Alice (asks)              Bob (accepts)
 wants to RECEIVE   ←────  pays from his own wallet
 ```
 
-Nothing is escrowed. A request is a claim; settling it moves the payer's own USDC
-straight to the requester, wallet to wallet. There is no contract in the middle
-holding money, so there is no balance that can get stuck and no refund path that
+A request is a claim, not an escrow. Settling it moves the payer's own USDC
+straight from their wallet to the requester. There is no contract holding money
+in between, so there is no balance that can get stuck and no refund path that
 can go wrong.
 
-That also enables three things Cash App cannot do:
-
-- **Open requests.** `askAnyone` names nobody, so anyone holding the link can
-  settle it. A group gift becomes genuinely open rather than "text Bob and hope".
-- **Partial payments.** `pay(id, amount)` takes any value up to what is left.
-  Several people can chip into one request, and it settles exactly when the total
-  is reached.
-- **Nothing to lose.** No escrow means nothing to strand.
+That is also what lets the named payer **decline**. A decline closes the
+request, moves nothing, and is final — the same payer cannot reverse it and pay
+later. `responded[id][payer]` records that they have answered, and only the
+person named in the request may decline at all.
 
 ## Live on Arc mainnet
 
 | contract         | address                                      |
 | ---------------- | -------------------------------------------- |
-| PaymentRequest   | `0xd8d5e36feba036fe52589cfbe64e210ecf45f492` |
+| PaymentRequest   | `0xe71c9a722605ff6541d659a685f968349624e075` |
 | UsernameRegistry | `0x71508725F355cf017B42Bccd878cff3c8a0bE641` |
-| USDC             | `0x3600000000000000000000000000000000000005` |
+| USDC             | `0x3600000000000000000000000000000000000000` |
 
-Chain 5042. An earlier deployment at `0xc1e3a7b06b39aabb11e639cf5e2dad171a8a712e`
-is inert — its constructor arguments were supplied in the wrong order. Ignore it.
+Chain 5042. Two earlier deployments are inert and should be ignored:
+`0xc1e3a7b06b39aabb11e639cf5e2dad171a8a712e` (constructor arguments supplied in
+the wrong order) and `0xd8d5e36feba036fe52589cfbe64e210ecf45f492` (built against
+a USDC address that is not a contract on Arc). Both came from mistakes, and both
+are recorded here rather than quietly dropped.
 
-## Verified
+## The app
 
-On mainnet, request #1 is live and readable:
+Four tabs, and each one answers a different question.
+
+| tab         | question it answers                           |
+| ----------- | --------------------------------------------- |
+| **Send**    | who do I want to pay, and how much?           |
+| **Request** | who do I want to ask, for what, and how much? |
+| **Pending** | what is waiting on my answer?                 |
+| **History** | what already happened?                        |
+
+Request takes a username, an amount and a purpose. Asking costs about half a
+cent and locks nothing — the balance does not move, because no escrow exists.
+
+Pending lists what you might pay or decline. A request naming you shows **Pay**
+and **Decline**. History is a record and offers no controls.
+
+Settling uses an exact allowance: the payer approves precisely the amount being
+settled, never an open-ended one.
+
+## Verified on mainnet
+
+Registration and the request path have been driven end to end:
 
 ```
-statusOf(1)       1  (Open)
-remaining(1)      100 USDC
-openUnnamedCount  1
-purpose           "arc microgrant demo"
+@ife registered   0x48d3cd11…c874   block 23914000
+@adaeze           0x59a8fd5c…1213
+PaymentRequest    nextId 4
 ```
 
-25 contract tests and 11 frontend tests.
+Request #1 is readable on chain and still open. Pay and Decline were exercised
+by hand across two wallets.
+
+`35` contract tests and `36` frontend tests:
 
 ```bash
-forge test        # 25 passing
-npx vitest run    # 11 passing
+forge test        # 35 passing
+npx vitest run    # 36 passing
 ```
 
-The tests cover the parts that are easy to get wrong: that asking escrows
-nothing, that `pay` moves money from payer to requester, that a stranger can
-settle an open request, that 40 + 60 settles exactly at 100, that a partial
-payment keeps the request open, that `close` leaves the asker holding what was
-already paid, and that the open-request feed drops settled ids without
-disturbing the others.
+The contract suite covers what is easy to get wrong: that asking escrows
+nothing, that `pay` moves money from payer to requester rather than through the
+contract, that the requester cannot decline their own request, that a stranger
+cannot decline someone else's, that a partly paid request cannot be declined,
+that a decline cannot be reversed by a later payment, and that `close` leaves
+the asker holding what was already collected.
 
-Both flows were also driven through a browser against a local chain: Alice asks
-100 USDC naming nobody, Bob pays 30 from **To Pay**, Carol pays the remaining 70
-from **Open**. Balances land at 10100 / 9970 / 9930 with the contract holding 0.
-Sending by username was checked the same way — 12.5 USDC moved 20000 → 19987.5
-and 10000 → 10012.5.
-
-### Not yet proven on mainnet
-
-The payment leg has not completed over the public RPC. Arc USDC is a
-precompile, and `rpc.mainnet.arc.io` does not proxy `eth_call` reads or
-transactions to it, so `approve` reverts. Asking works; settling needs a wallet,
-which talks to the precompile directly.
+The frontend suite pins the bugs that actually shipped, each with the real
+values from mainnet rather than invented ones: address casing (the raw decoder
+returns lowercase while wagmi returns checksummed, so `===` never matched and
+the Decline button could not render), amount formatting (USDC has six decimals,
+and rounding to four turned a real request into `0 USDC`), and the ordering of
+merged request lists.
 
 ## Why Arc
 
-USDC is the gas token on Arc, so the asset being moved also pays for the
-transfer. Measured on mainnet:
+USDC is the gas token, so the asset being moved also pays for the transfer.
 
-| step        | cost       |
-| ----------- | ---------- |
-| deploy      | 0.0313 USDC |
-| askAnyone   | 0.0048 USDC |
+| step    | measured cost |
+| ------- | ------------- |
+| deploy  | 0.0313 USDC   |
+| `ask`  | 0.0048 USDC   |
 
-Posting a request costs about half a cent. On a chain where gas is a different
-asset, small peer-to-peer payments do not clear that bar — the fee eats the
-amount. Arc is what makes "ask for $4, get paid in a tap" worth building.
+On a chain where gas is a different asset, small peer-to-peer payments do not
+clear that bar — the fee eats the amount. Arc is what makes asking for a few
+dollars worth building.
 
 ## Contracts
 
-Both written from scratch, no external dependencies beyond the ERC-20 interface.
+Both written from scratch. The only external dependency is the ERC-20 interface.
 
 ### `UsernameRegistry`
 
 Maps a name to an address.
 
 - case-insensitive: `resolve("ADAEZE")` finds `adaeze`
-- one name per address, names transferable
+- one name per address, and names can be transferred
 - rejects dots and dashes so a name cannot imitate a domain
 - 3–32 characters, `[a-z0-9_]` only
 
 ### `PaymentRequest`
 
-1. `ask(username, purpose, amount, expiry)` — ask a named person. The name is
-   resolved at ask time and the address is fixed from then on.
-2. `askAnyone(purpose, amount, expiry)` — ask nobody in particular. Anyone may
-   settle it.
-3. `pay(id, amount)` — pay any amount up to what remains. The payer approves
-   exactly that amount; no blanket allowance. The last payment moves the request
-   to `Paid` and emits `Settled` with the running total.
-4. `payRemaining(id)` — settle the rest in one call.
-5. `cancel(id)` — close a request nobody has paid.
-6. `close(id)` — stop a partly paid request. The asker keeps what was paid.
+| function | purpose |
+| -------- | ------- |
+| `ask(username, purpose, amount, expiry)` | ask a named person; the address is fixed from that moment |
+| `askAnyone(purpose, amount, expiry)` | ask nobody in particular |
+| `pay(id, amount)` | pay any amount up to what remains |
+| `payRemaining(id)` | settle the rest in one call |
+| `decline(id)` | named payer only; closes it, moves nothing, final |
+| `canRespond(id, account)` | whether the UI should offer Pay or Decline |
+| `cancel(id)` | requester closes an unpaid request |
+| `close(id)` | requester stops a partly paid one, keeping what was collected |
+| `responded(id, payer)` | whether that payer has already answered |
 
-Status is `None`, `Open`, `Paid`, `Cancelled`. `paidBy(id, payer)` records what
-each person contributed. Expiry is capped at 90 days and enforced on chain;
-purposes are capped at 140 characters.
+Status is `None`, `Open`, `Paid`, `Cancelled`, `Declined`. Expiry is capped at
+90 days and enforced on chain; purposes at 140 characters.
 
-Because nothing is escrowed, `cancel` and `close` move no money. They only
-change state.
+Because nothing is escrowed, `cancel`, `close` and `decline` move no money at
+all. They only change state.
 
-## Running the frontend
+### Supported on chain, not offered in the app
+
+`askAnyone` and partial `pay(id, amount)` remain in the contract and are tested,
+but the app only creates named requests and only settles them in full. Open
+requests already on chain can still be paid. The product is one person asking
+one named person, so the controls for the rest were removed rather than left
+half-wired.
+
+## Running it
 
 ```bash
 npm install
 npm run dev
 ```
 
-The app targets Arc mainnet by default. Override with `VITE_RPC`, `VITE_USDC`,
-`VITE_REGISTRY`, and `VITE_REQUESTS` in `src/pay.ts`.
-
-## Running the mainnet proof
-
-`mainnet-proof.mjs` posts a request and settles it in two parts. It needs a
-funded key on disk:
-
-```bash
-node mainnet-proof.mjs
-```
-
-It reads `/home/administrator/.arc-deployer.key`, which is not in this repo.
-Point that path at your own key file, or edit it.
+Targets Arc mainnet by default. Override with `VITE_RPC`, `VITE_USDC`,
+`VITE_REGISTRY` and `VITE_REQUESTS` in `src/pay.ts`.
 
 ## Live
 
@@ -156,9 +166,10 @@ https://adebisi1111.github.io/send-app
 ```
 contracts/
   UsernameRegistry.sol     name -> address
-  PaymentRequest.sol       ask / pay / cancel / close
-  test/                    25 tests
+  PaymentRequest.sol       ask / pay / decline / cancel / close
+  test/                    35 tests
 src/
-  Pay.tsx                  the app: Send, Ask, To Pay, Open, Mine
-  pay.ts                   addresses, ABIs, formatting
+  Pay.tsx                  the app
+  pay.ts                   addresses, ABIs, formatting, error mapping
+  index.css                design system
 ```
