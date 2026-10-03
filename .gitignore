@@ -45,3 +45,5 @@ check-pixels.cjs
 check-rhyme.cjs
 check-fixes.cjs
 check-motion.cjs
+check-popup.cjs
+.pop-harness.html

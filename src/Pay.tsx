@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useAccount, useChainId, useConnect, useSwitchChain, useWriteContract } from 'wagmi';
 import { createPublicClient, http, zeroAddress } from 'viem';
 import { waitForTransactionReceipt } from 'viem/actions';
@@ -149,6 +149,14 @@ export default function Pay() {
   const [note, setNote] = useState<string | null>(null);
   /** Seconds left before the success line clears itself. */
   const [noteLeft, setNoteLeft] = useState(0);
+  /** Full lifetime of the current note, so the ring can show what is left. */
+  const noteTotal = useRef(0);
+  // A settled request earns a real moment rather than a line of text: a circular
+  // overlay with the amount at its centre and a ring that empties as it stands
+  // down. Kept apart from `note` so an ordinary send does not get a celebration
+  // it did not earn.
+  const [pop, setPop] = useState<{ amount: string; to: string; purpose: string } | null>(null);
+  const popTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // A single slot meant a second alert overwrote the first with no trace, which
   // reads as "no notification". Queue them and show one at a time.
@@ -472,7 +480,8 @@ export default function Pay() {
   const flash = (text: string, ms: number) => {
     if (noteTimer.current) clearInterval(noteTimer.current);
     setNote(text);
-    setNoteLeft(Math.ceil(ms / 1000));
+    noteTotal.current = Math.ceil(ms / 1000);
+    setNoteLeft(noteTotal.current);
     noteTimer.current = setInterval(() => {
       setNoteLeft((s) => {
         if (s <= 1) {
@@ -491,11 +500,35 @@ export default function Pay() {
     noteTimer.current = null;
     setNote(null);
     setNoteLeft(0);
+    noteTotal.current = 0;
   };
+
+  const POP_MS = 5200;
+
+  const openPop = (amount: string, to: string, purpose: string) => {
+    if (popTimer.current) clearTimeout(popTimer.current);
+    setPop({ amount, to, purpose });
+    popTimer.current = setTimeout(() => { setPop(null); popTimer.current = null; }, POP_MS);
+  };
+
+  const closePop = () => {
+    if (popTimer.current) clearTimeout(popTimer.current);
+    popTimer.current = null;
+    setPop(null);
+  };
+
+  // How much of the note's life is left, 0-100. Drives the ring. Falls back to
+  // a full ring if the total was never recorded.
+  const notePct = noteTotal.current > 0
+    ? Math.max(0, Math.min(100, (noteLeft / noteTotal.current) * 100))
+    : 0;
 
   // A success line left running when the tab goes away would fire into an
   // unmounted tree, so stop it on unmount.
-  useEffect(() => () => { if (noteTimer.current) clearInterval(noteTimer.current); }, []);
+  useEffect(() => () => {
+    if (noteTimer.current) clearInterval(noteTimer.current);
+    if (popTimer.current) clearTimeout(popTimer.current);
+  }, []);
 
   const run = async (label: string, fn: () => Promise<string>) => {
     setBusy(label); setErr(null); clearFlash();
@@ -580,6 +613,10 @@ export default function Pay() {
       });
       await waitForTransactionReceipt(client, { hash: h });
       const done = r.collected + amt === r.amount;
+      if (done) {
+        // A settled request gets the circular confirmation, not a text line.
+        openPop(fmtUsdc(amt), short(r.requester), r.purpose);
+      }
       return done
         ? `Paid ${fmtUsdc(amt)} USDC — request fully settled`
         : `Paid ${fmtUsdc(amt)} USDC — ${fmtUsdc(r.amount - r.collected - amt)} still to go`;
@@ -731,8 +768,18 @@ export default function Pay() {
         {note && (
           <div className="msg msg-ok" onMouseEnter={() => clearFlash()}>
             <span className="msg-txt">{note}</span>
-            <button className="msg-x" onClick={clearFlash} aria-label="Dismiss">
-              {noteLeft}s ✕
+            {/* A ring that empties as the note expires, rather than a raw
+                seconds counter. It communicates "this will go away" at a glance
+                and stops the digits from being the most prominent thing in the
+                message. The number stays available to assistive tech. */}
+            <button
+              className="msg-ring"
+              style={{ '--pct': `${notePct.toFixed(1)}%` } as CSSProperties}
+              onClick={clearFlash}
+              aria-label={`Dismiss confirmation, ${noteLeft} seconds remaining`}
+              title="Dismiss"
+            >
+              <span aria-hidden="true">✕</span>
             </button>
           </div>
         )}
@@ -951,6 +998,29 @@ export default function Pay() {
             setNotifyPrompt(false);
           }}>{canAsk ? 'Allow' : 'How to enable'}</button>
           {notifyMsg && <div className="hint" style={{ marginTop: 4 }}>{notifyMsg}</div>}
+        </div>
+      )}
+
+      {/* Circular confirmation for a settled request. Announced politely rather
+          than assertively: it confirms an action the user just took, so it
+          should not interrupt whatever they do next. */}
+      {pop && (
+        <div className="pop" role="status" aria-live="polite" onClick={closePop}>
+          <div className="pop-card" onClick={(e) => e.stopPropagation()}>
+            <div className="pop-ring" style={{ '--pop-ms': `${POP_MS}ms` } as CSSProperties}>
+              <div className="pop-track" aria-hidden="true" />
+              <div className="pop-core">
+                <div className="pop-amt">{pop.amount}</div>
+                <div className="pop-unit">USDC paid</div>
+              </div>
+            </div>
+            <div className="pop-title">Request settled</div>
+            <div className="pop-meta">
+              to {pop.to}
+              {pop.purpose ? <> &middot; &ldquo;{pop.purpose}&rdquo;</> : null}
+            </div>
+            <button className="pop-close" onClick={closePop}>Done</button>
+          </div>
         </div>
       )}
 

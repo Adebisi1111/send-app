@@ -446,3 +446,260 @@ a:focus-visible {
     transition: none;
   }
 }
+
+/* ------------------------------------------- settled-request popup */
+
+/* A centred circular confirmation. The ring animates 100% -> 0 so the overlay
+   visibly stands itself down over exactly the same duration the timer uses,
+   then the card unmounts. Two animations on purpose: the ring is a real
+   countdown, the scale is a brief entrance. */
+.pop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: pop-fade 0.22s ease both;
+}
+
+.pop-card {
+  width: min(320px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 26px 22px 20px;
+  border-radius: var(--r-lg, 16px);
+  background: var(--bg-elev, #fff);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 44px -18px color-mix(in srgb, var(--ink) 38%, transparent);
+  text-align: center;
+  animation: pop-rise 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.pop-ring {
+  --d: 148px;   /* the ring's diameter */
+  --t: 13px;    /* ring thickness; the track is diameter - 2*t */
+  position: relative;
+  width: var(--d);
+  height: var(--d);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin-bottom: 6px;
+  /* NO mask on the ring itself. A mask applies to the whole subtree, so
+     putting it here erased the amount in the middle along with the ring's
+     interior -- the ring drew and the number vanished. The mask belongs on the
+     two painted halves only. */
+}
+
+/* the unfilled track, drawn as its own hollow disc */
+.pop-ring .pop-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--brand) 16%, transparent);
+  -webkit-mask: radial-gradient(circle, transparent 0 calc(50% - var(--t)), #000 calc(50% - var(--t) + 1px) 100%);
+  mask: radial-gradient(circle, transparent 0 calc(50% - var(--t)), #000 calc(50% - var(--t) + 1px) 100%);
+}
+
+/* Two half-discs, each clipped to one side, rotating against each other: the
+   classic CSS pie. Chosen because `transform` and static masks animate in every
+   browser, whereas animating a custom property inside a conic-gradient does not
+   (measured: the gradient resolves to `none`). */
+.pop-ring::before,
+.pop-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  -webkit-mask: radial-gradient(circle, transparent 0 calc(50% - var(--t)), #000 calc(50% - var(--t) + 1px) 100%);
+  mask: radial-gradient(circle, transparent 0 calc(50% - var(--t)), #000 calc(50% - var(--t) + 1px) 100%);
+  animation: pop-half var(--pop-ms, 5200ms) linear both;
+}
+
+/* left half shows, right half hidden */
+.pop-ring::before {
+  clip-path: inset(0 50% 0 0);
+  animation-name: pop-half-a;
+}
+
+/* right half shows, left half hidden */
+.pop-ring::after {
+  clip-path: inset(0 0 0 50%);
+  animation-name: pop-half-b;
+}
+
+.pop-core {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+}
+
+.pop-amt {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.pop-unit {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-2);
+}
+
+.pop-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pop-meta {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  max-width: 26ch;
+}
+
+.pop-close {
+  margin-top: 12px;
+  min-height: var(--tap, 44px);
+  padding: 0 20px;
+  border-radius: var(--r-sm, 8px);
+  border: 1px solid var(--line);
+  background: var(--bg-elev, #fff);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.pop-close:hover {
+  background: color-mix(in srgb, var(--ink) 5%, var(--bg-elev, #fff));
+}
+
+.pop-close:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@keyframes pop-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes pop-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The two halves counter-rotate so the filled wedge shrinks clockwise from
+   full to empty over exactly --pop-ms, which the component sets from the same
+   constant that unmounts the card. */
+@keyframes pop-half-a {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(-360deg); }
+}
+
+@keyframes pop-half-b {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg);  }
+}
+
+/* No @property registration here, deliberately.
+   Measured in this browser: with `@property --pct{syntax:'<percentage>'}` the
+   value computes to 100% and `conic-gradient(... calc(var(--pct)*1%) ...)`
+   resolves to `none`, so the ring paints NOTHING. Unregistered, the same
+   gradient interpolates correctly (verified 37% -> correct stop).
+   The note ring therefore gets its value from an inline style only, with no
+   animation, and the popup sweep uses the two-half pie technique below, which
+   needs no animatable custom property at all. */
+
+@media (prefers-reduced-motion: reduce) {
+  .pop,
+  .pop-card {
+    animation: none;
+  }
+  /* No sweeping, but the ring must still show FULL, not empty: with the
+     animation disabled both halves sit at their `from` state, which is the
+     complete ring. */
+  .pop-ring::before,
+  .pop-ring::after {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------- confirmation ring */
+
+/* Replaces the raw seconds counter that used to sit in the corner of the
+   success line. A conic sweep reads as "time remaining" without putting a
+   number in the loudest position, and it costs no JS beyond one custom
+   property. --pct is written by the component on every tick. */
+.msg-ring {
+  flex: none;
+  display: grid;
+  place-items: center;
+  /* 44px target so it clears the touch floor; the visible ring is drawn smaller
+     by ::below, inset inside this box, so it still looks like a 30px control */
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--ok-ink);
+  position: relative;
+}
+
+/* The sweep lives on ::before because a mask on the button itself would erase
+   the glyph along with the ring. The glyph sits above it, unmasked. */
+.msg-ring > span {
+  position: relative;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.75;
+}
+.msg-ring::before {
+  content: '';
+  position: absolute;
+  inset: 7px;              /* 44px target - 7px each side = a 30px ring */
+  border-radius: 50%;
+  /* --pct is a percentage string ("72%"), used directly. The tempting
+     calc(var(--pct) * 1%) form is silently INVALID in this engine and drops the
+     entire declaration, leaving the ring unpainted -- measured, not guessed. */
+  background: conic-gradient(
+    currentColor var(--pct, 0%),
+    color-mix(in srgb, currentColor 22%, transparent) 0
+  );
+  -webkit-mask: radial-gradient(circle at center, transparent 0 45%, #000 46% 100%);
+  mask: radial-gradient(circle at center, transparent 0 45%, #000 46% 100%);
+}
+
+.msg-ring:hover > span {
+  opacity: 1;
+}
+
+.msg-ring:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Ring animation is the only motion here, and it is purely decorative:
+   the timer still runs, so removing the transition costs no information. */
+@media (prefers-reduced-motion: reduce) {
+  .msg-ring::before {
+    transition: none;
+  }
+}
