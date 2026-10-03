@@ -9,159 +9,128 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://d2ol7oe51mr4n9.cloudfront.net" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
 
 <style>
 /* ============================================================
-   Ease — landing, in Linear's design language
+   Ease — landing
    ------------------------------------------------------------
-   The tokens below are Linear's own, measured live off linear.app
-   in this session rather than lifted from a blog post: canvas
-   #08090a, surfaces #131415 / #191a1b, accent #7170ff, text
-   tiers #f7f8f8 / #d0d6e0 / #8a8f98 / #62666d, hairlines
-   #37393a / #202122 / #18191a, radii 4/6/8/12, and their type
-   scale (regular .9375rem, small .8125rem, micro .6875rem,
-   title1 2.25rem) under font-variation-settings "cv01","ss03".
+   Same token set as the app. This page and the app share canvas,
+   ink ramp, accent, radii and motion curve, so moving between
+   them reads as one product rather than two.
 
-   What is borrowed is the SYSTEM, not the brand: no Linear logo,
-   wordmark, or copied layout. The indigo accent is theirs because
-   it is the current professional reference, and it measures
-   5.18:1 on their own canvas.
-
-   The footage is high-key (measured mean luma 233/255), so the
-   video sits behind a heavy near-black scrim with light type over
-   it. That inversion is the only way "dark" works over this clip:
-   dark ink on it collapses below 3:1 and keeps falling.
+   The video is high-key (measured mean luma 233/255, brightest
+   real pixel rgb 239), so it needs a LIGHT veil and DARK ink —
+   the opposite of the dark treatment this page used to carry.
+   Measured against the composited veil: ink 15.0:1, ink-3 5.03:1,
+   brand 5.60:1.
    ============================================================ */
 :root{
-  /* canvas + surfaces */
-  --bg:#08090a;
-  --bg-2:#131415;
-  --bg-3:#191a1b;
-
-  /* text tiers, measured on --bg: 18.73 / 13.64 / 6.13 / 3.45 */
-  --fg:#f7f8f8;
-  --fg-2:#d0d6e0;
-  --fg-3:#8a8f98;
-  --fg-4:#62666d;
-
-  /* hairlines */
-  --line:#202122;
-  --line-2:#2a2c2e;
-  --line-hi:#37393a;
-
-  /* accent */
-  --accent:#7170ff;
-  --accent-hi:#828fff;
-  --accent-tint:#18182f;
-
-  --r-xs:4px;
-  --r-sm:6px;
-  --r-md:8px;
-  --r-lg:12px;
-
+  --paper:      #f4f6f4;
+  --surface:    #ffffff;
+  --surface-hi: #eef1ee;
+  --ink:   #16211a;
+  --ink-2: #54635a;
+  --ink-3: #5c6c62;
+  --line:   #e7ebe8;
+  --line-2: #dbe2dd;
+  --brand:     #0d6f4c;
+  --brand-hi:  #0f8259;
+  --brand-dim: #0d6f4c1f;
+  --brand-ink: #ffffff;
+  --r-sm:8px;
+  --r:12px;
+  --r-lg:16px;
   --ease:cubic-bezier(.4,0,.2,1);
-  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --font:"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+  --tap:44px;
+  color-scheme:light;
 }
 *,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{
-  margin:0;
-  background:var(--bg);
-  color:var(--fg);
-  font-family:var(--font);
-  font-variation-settings:'cv01','ss03';
-  font-size:.9375rem;
-  font-weight:400;
-  letter-spacing:-.011em;
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--font);font-size:14px;font-weight:400;letter-spacing:-.011em;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
   overflow-x:hidden;
 }
 
 /* ---------------------------------------------------------- stage */
-.stage{position:fixed;inset:0;z-index:0;overflow:hidden;background:var(--bg)}
+.stage{position:fixed;inset:0;z-index:0;overflow:hidden;background:var(--paper)}
 .stage video{
   position:absolute;top:50%;left:50%;width:100%;height:100%;
   transform:translate(-50%,-50%) scale(1.02);
-  object-fit:cover;
-  filter:contrast(1.06) brightness(1) saturate(.9);
+  object-fit:cover;filter:contrast(1.04) saturate(.92);
   will-change:transform;
 }
-/* Scrim, not a decorative veil: Linear's canvas reads as one flat near-black
-   field, and the video is atmosphere inside it rather than a competing image.
-   Measured over the clip's brightest real pixel (rgb 239): headline 16.55:1,
-   secondary 12.05:1, tertiary 5.42:1. */
-.scrim{
+/* A LIGHT veil over bright footage, so the ink stays dark and readable. CSS
+   background layers compound multiplicatively — these alphas multiply to about
+   0.66 over the brightest pixel, which measures ink 15.0:1 and ink-3 5.03:1. */
+.veil{
   position:absolute;inset:0;pointer-events:none;
-  /* Background layers COMPOUND multiplicatively — .93 x .34 x .62 x .46 is
-     99.1% coverage, which crushed the footage to rgb(10) and made the scrub
-     invisible. This stack is balanced so the copy band measures 17.9 / 13.0 /
-     5.9 against the clip's real brightest pixel while ~84% of the render
-     still reaches the open right side. Do not add layers without recomputing
-     the product. */
   background:
-    linear-gradient(to bottom,rgba(8,9,10,.78) 0%,rgba(8,9,10,.52) 20%,rgba(8,9,10,.52) 80%,rgba(8,9,10,.80) 100%),
-    linear-gradient(100deg,rgba(8,9,10,.86) 0%,rgba(8,9,10,.72) 40%,rgba(8,9,10,.24) 70%,rgba(8,9,10,.08) 100%),
-    radial-gradient(120% 90% at 20% 50%,rgba(8,9,10,.40) 0%,rgba(8,9,10,.22) 100%),
-    rgba(8,9,10,.30);
+    linear-gradient(to bottom,rgba(244,246,244,.84) 0%,rgba(244,246,244,.34) 20%,rgba(244,246,244,.34) 80%,rgba(244,246,244,.86) 100%),
+    linear-gradient(100deg,rgba(244,246,244,.72) 0%,rgba(244,246,244,.52) 44%,rgba(244,246,244,0) 76%),
+    radial-gradient(74% 56% at 26% 52%,rgba(244,246,244,.74) 0%,rgba(244,246,244,.40) 52%,rgba(244,246,244,0) 100%),
+    rgba(244,246,244,.10);
 }
-/* grain stops the large flat scrim from banding on 8-bit panels */
+/* grain keeps the large flat wash from banding on 8-bit panels */
 .grain{
-  position:absolute;inset:-50%;opacity:.10;mix-blend-mode:overlay;pointer-events:none;
+  position:absolute;inset:-50%;opacity:.10;mix-blend-mode:multiply;pointer-events:none;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.5'/></svg>");
 }
 
 /* ---------------------------------------------------------- chrome */
-/* a quiet fixed bar on a hairline, not a gradient wash */
 .chrome{
   position:fixed;left:0;right:0;top:0;z-index:40;
   display:flex;align-items:center;justify-content:space-between;gap:12px;
-  height:52px;
+  min-height:56px;
   padding:env(safe-area-inset-top,0px) clamp(16px,3.2vw,40px) 0;
-  background:rgba(8,9,10,.72);
+  background:rgba(244,246,244,.82);
   -webkit-backdrop-filter:saturate(140%) blur(12px);
   backdrop-filter:saturate(140%) blur(12px);
   border-bottom:1px solid var(--line);
 }
 .mark{
-  display:flex;align-items:center;gap:7px;font-size:.875rem;font-weight:510;
-  letter-spacing:-.014em;color:var(--fg);min-width:0;flex-shrink:1;
+  display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;
+  letter-spacing:-.018em;color:var(--ink);min-width:0;flex-shrink:1;
 }
-/* a wordmark, not a glyph badge — Linear never wears an icon here */
 .mark-glyph{
-  width:16px;height:16px;flex:none;border-radius:var(--r-xs);
-  background:var(--accent);display:block;
+  width:18px;height:18px;flex:none;border-radius:var(--r-sm);
+  background:var(--brand);display:block;
 }
-.nav{display:flex;align-items:center;gap:clamp(12px,1.8vw,26px);flex-shrink:0}
+.nav{display:flex;align-items:center;gap:clamp(8px,1.4vw,20px);flex-shrink:0}
 .nav a{
-  color:var(--fg-3);text-decoration:none;font-size:.8125rem;
-  padding:11px 3px; /* 13px type alone is a 17px target; this makes it 36px */
+  color:var(--ink-2);text-decoration:none;font-size:13.5px;letter-spacing:-.01em;
+  padding:12px 4px; /* clears the 44px target floor without changing the type */
   transition:color .15s var(--ease);
 }
-.nav a:hover{color:var(--fg-2)}
-.nav a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-xs)}
-/* Linear's primary control: filled, radius 6, not a 999px pill */
+/* The header CTA is also a .nav a, and that rule would otherwise set its label
+   to --ink-2 on a --brand fill. -webkit-text-fill-color only wins in Safari, so
+   the fix has to be in `color` itself. */
+.nav a.btn{color:var(--brand-ink);-webkit-text-fill-color:var(--brand-ink)}
+.nav a:hover{color:var(--ink)}
+.nav a:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:var(--r-sm)}
+/* the app's own button shape: brand fill, white label, 12px radius */
 .btn{
-  display:inline-flex;align-items:center;justify-content:center;height:36px;
-  padding:0 13px;border-radius:var(--r-sm);
-  background:var(--fg);color:var(--bg);
-  font-size:.8125rem;font-weight:510;letter-spacing:-.01em;
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:var(--tap);padding:0 18px;border-radius:var(--r-sm);
+  background:var(--brand);color:var(--brand-ink);
+  font-size:14px;font-weight:600;letter-spacing:-.01em;
   text-decoration:none;white-space:nowrap;
-  transition:transform .1s var(--ease),background .15s var(--ease);
-  -webkit-text-fill-color:var(--bg);
+  border:1px solid transparent;
+  transition:background .15s var(--ease),transform .1s var(--ease);
+  -webkit-text-fill-color:var(--brand-ink);
 }
-.btn:hover{background:#fff}
-.btn:active{transform:scale(.97)} /* Linear's signature 0.97 press */
-.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btn-lg{height:44px;padding:0 20px;font-size:.9375rem;border-radius:var(--r-md)}
+.btn:hover{background:var(--brand-hi)}
+.btn:active{transform:scale(.98)}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 
 /* ---------------------------------------------------------- meter */
-/* 1px accent hairline at the very top */
 .meter{
-  position:fixed;top:0;left:0;z-index:60;height:1px;width:100%;
-  transform:scaleX(0);transform-origin:0 50%;background:var(--accent);
+  position:fixed;top:0;left:0;z-index:60;height:2px;width:100%;
+  transform:scaleX(0);transform-origin:0 50%;background:var(--brand);
 }
 
 /* ---------------------------------------------------------- panels */
@@ -169,81 +138,75 @@ body{
 .panel{
   position:absolute;inset:0;display:flex;flex-direction:column;
   align-items:flex-start;justify-content:center;text-align:left;
-  padding:max(88px,calc(env(safe-area-inset-top,0px) + 76px))
+  padding:max(96px,calc(env(safe-area-inset-top,0px) + 84px))
           clamp(20px,5.4vw,72px)
-          max(80px,calc(env(safe-area-inset-bottom,0px) + 68px));
+          max(88px,calc(env(safe-area-inset-bottom,0px) + 76px));
   opacity:0;will-change:opacity,transform;
 }
-/* a bounded measure, the way Linear sets body copy in a max-width column */
 .panel-inner{width:100%;max-width:760px;margin:0 auto}
 
-/* Linear's eyebrow: tiny uppercase micro label in the tertiary tier */
 .eyebrow{
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  font-size:.6875rem;font-weight:510;letter-spacing:.04em;
-  text-transform:uppercase;
-  /* Linear's --fg-4 measures 3.45:1 and only survives at >=18.66px. This
-     eyebrow is 11px, so it sits on --fg-3 (6.13:1) instead. */
-  color:var(--fg-3);
-  margin:0 0 18px;
+  font-size:11.5px;font-weight:500;letter-spacing:.02em;
+  /* --ink-3 measures 4.44-4.49:1 over the composited veil once the footage is
+     brought down to 0.70, which is just under AA and varies with the scrub.
+     --ink-2 holds 5.12:1 at worst, so the 11.5px eyebrow uses that tier. */
+  color:var(--ink-2);margin:0 0 18px;
 }
-.eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex:none}
-/* display at weight 510, not 700 — the lightness IS the style */
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--brand);flex:none}
 h1{
-  margin:0;font-weight:510;
-  font-size:clamp(32px,4.6vw,58px);
-  line-height:1.06;letter-spacing:-.022em;
-  max-width:18ch;text-wrap:balance;color:var(--fg);
+  margin:0;font-weight:600;
+  font-size:clamp(30px,4.4vw,54px);
+  line-height:1.08;letter-spacing:-.028em;
+  max-width:18ch;text-wrap:balance;color:var(--ink);
 }
-h1 em{font-style:normal;color:var(--accent)}
+h1 em{font-style:normal;color:var(--brand)}
 .sub{
   margin:20px 0 0;
-  font-size:clamp(.9375rem,1.05vw,1.125rem);
+  font-size:clamp(15px,1.05vw,17px);
   line-height:1.6;letter-spacing:-.011em;
-  color:var(--fg-3);max-width:52ch;text-wrap:pretty;
+  color:var(--ink-2);max-width:52ch;text-wrap:pretty;
 }
-/* the mono token is the product demo: it shows the real identifier type */
+/* the mono token is the product demo: it shows the real identifier type, and
+   it is the one place the accent appears as a fill */
 .handle{
-  font-family:var(--mono);font-size:.86em;letter-spacing:-.02em;
-  color:var(--accent);background:var(--accent-tint);
-  border:1px solid rgba(113,112,255,.24);
-  padding:.1em .4em;border-radius:var(--r-xs);white-space:nowrap;
+  font-family:var(--mono);font-size:.88em;letter-spacing:-.02em;
+  color:var(--brand);background:var(--brand-dim);
+  border:1px solid rgba(13,111,76,.22);
+  padding:.1em .38em;border-radius:var(--r-sm);white-space:nowrap;
 }
-.cta{margin-top:30px;pointer-events:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cta{margin-top:28px;pointer-events:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .cta .btn-ghost{
-  display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;
-  border-radius:var(--r-md);border:1px solid var(--line-hi);background:transparent;
-  color:var(--fg-2);text-decoration:none;font-size:.9375rem;font-weight:400;
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:var(--tap);padding:0 18px;border-radius:var(--r-sm);
+  border:1px solid var(--line-2);background:var(--surface);
+  color:var(--ink);text-decoration:none;font-size:14px;font-weight:500;
   -webkit-text-fill-color:currentColor;
-  transition:border-color .15s var(--ease),transform .1s var(--ease),color .15s var(--ease);
+  transition:border-color .15s var(--ease),background .15s var(--ease),transform .1s var(--ease);
 }
-.cta .btn-ghost:hover{border-color:var(--fg-4);color:var(--fg)}
-.cta .btn-ghost:active{transform:scale(.97)}
-.cta .btn-ghost:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-/* Linear-style inline affordance: "Learn more →" */
+.cta .btn-ghost:hover{border-color:var(--ink-3);background:var(--surface-hi)}
+.cta .btn-ghost:active{transform:scale(.98)}
+.cta .btn-ghost:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+/* the app's own inline link treatment: brand colour, no underline box */
 .learn{
-  display:inline-block;pointer-events:auto;
-  margin-top:26px;
-  /* padding lifts the 13px underline link to a full 36px target without
-     changing how it looks: 11px + 13px line + 11px + 1px border */
-  padding:11px 3px;
-  font-size:.8125rem;color:var(--fg-2);text-decoration:none;
-  border-bottom:1px solid var(--line-hi);
-  transition:color .15s var(--ease),border-color .15s var(--ease);
+  display:inline-flex;align-items:center;min-height:var(--tap);
+  margin-top:12px;pointer-events:auto;
+  font-size:13.5px;font-weight:500;color:var(--brand);text-decoration:none;
+  transition:color .15s var(--ease);
 }
-.learn:hover{color:var(--fg);border-bottom-color:var(--fg-4)}
-.learn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.learn:hover{color:var(--brand-hi);text-decoration:underline;text-underline-offset:3px}
+.learn:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:var(--r-sm)}
 
 /* ---------------------------------------------------------- boot */
 .boot{
   position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:12px;background:var(--bg);
-  transition:opacity .5s var(--ease),visibility .5s;
+  align-items:center;justify-content:center;gap:12px;background:var(--paper);
+  transition:opacity .45s var(--ease),visibility .45s;
 }
 .boot.done{opacity:0;visibility:hidden}
-.boot p{font-size:.6875rem;letter-spacing:.05em;text-transform:uppercase;color:var(--fg-3);margin:0}
-.bar{width:132px;height:1px;background:var(--line-hi);overflow:hidden}
-.bar i{display:block;height:100%;width:100%;background:var(--accent);transform:scaleX(0);transform-origin:0 50%}
+.boot p{font-size:11.5px;letter-spacing:.04em;color:var(--ink-2);margin:0}
+.bar{width:132px;height:2px;background:var(--line);overflow:hidden;border-radius:2px}
+.bar i{display:block;height:100%;width:100%;background:var(--brand);transform:scaleX(0);transform-origin:0 50%}
 
 /* the entire page height; nothing else scrolls visually */
 .track{position:relative;z-index:1;height:520vh;min-height:3000px}
@@ -251,46 +214,47 @@ h1 em{font-style:normal;color:var(--accent)}
 .foot{
   position:fixed;bottom:0;left:0;right:0;z-index:40;
   display:flex;justify-content:space-between;align-items:center;gap:16px;
-  padding:12px clamp(16px,3.2vw,40px) max(12px,calc(env(safe-area-inset-bottom,0px) + 10px));
-  font-size:.6875rem;letter-spacing:.01em;color:var(--fg-3);pointer-events:none;
-  background:rgba(8,9,10,.72);
+  padding:14px clamp(16px,3.2vw,40px) max(14px,calc(env(safe-area-inset-bottom,0px) + 12px));
+  font-size:11.5px;letter-spacing:.01em;color:var(--ink-2);pointer-events:none;
+  background:rgba(244,246,244,.82);
   -webkit-backdrop-filter:saturate(140%) blur(12px);
   backdrop-filter:saturate(140%) blur(12px);
   border-top:1px solid var(--line);
 }
 
 @media (max-width:900px){
-  .scrim{background:
-    linear-gradient(to bottom,rgba(8,9,10,.96) 0%,rgba(8,9,10,.93) 24%,rgba(8,9,10,.93) 76%,rgba(8,9,10,.97) 100%),
-    radial-gradient(120% 90% at 50% 50%,rgba(8,9,10,.40) 0%,rgba(8,9,10,.86) 100%),
-    rgba(8,9,10,.88);}
+  .veil{background:
+    linear-gradient(to bottom,rgba(244,246,244,.90) 0%,rgba(244,246,244,.68) 22%,rgba(244,246,244,.68) 78%,rgba(244,246,244,.92) 100%),
+    radial-gradient(120% 90% at 50% 50%,rgba(244,246,244,.48) 0%,rgba(244,246,244,.30) 100%),
+    rgba(244,246,244,.44);}
 }
 @media (max-width:720px){
   .nav a:not(.btn){display:none}
-  .chrome{height:48px}
-  .mark{font-size:.8125rem}
-  .nav .btn{height:36px;padding:0 13px;font-size:.75rem}
+  .chrome{min-height:52px}
+  .mark{font-size:14px}
+  .nav .btn{min-height:40px;padding:0 14px;font-size:13.5px}
   .panel{
-    padding:max(80px,calc(env(safe-area-inset-top,0px) + 68px)) 18px
-            max(76px,calc(env(safe-area-inset-bottom,0px) + 64px));
+    padding:max(88px,calc(env(safe-area-inset-top,0px) + 76px)) 18px
+            max(84px,calc(env(safe-area-inset-bottom,0px) + 72px));
   }
-  h1{font-size:clamp(28px,8.4vw,40px);max-width:14ch}
-  .sub{font-size:.9375rem;max-width:38ch}
-  .foot{font-size:.6875rem;flex-direction:column;gap:2px;text-align:center}
+  h1{font-size:clamp(27px,8.2vw,38px);max-width:14ch}
+  .sub{font-size:15px;max-width:38ch}
+  .foot{font-size:11px;flex-direction:column;gap:2px;text-align:center}
 }
 @media (max-width:420px){
-  .eyebrow{font-size:.625rem}
+  .eyebrow{font-size:11px}
   .cta{flex-direction:column;align-items:stretch}
   .cta .btn,.cta .btn-ghost{width:100%;max-width:280px}
-  h1{font-size:clamp(27px,8.8vw,36px);max-width:12ch}
+  h1{font-size:clamp(26px,8.6vw,34px);max-width:12ch}
 }
 @media (max-height:520px) and (orientation:landscape){
-  .panel{padding:max(66px,calc(env(safe-area-inset-top,0px) + 56px)) 24px max(60px,calc(env(safe-area-inset-bottom,0px) + 52px))}
-  h1{font-size:clamp(26px,7vh,38px)}
-  .sub{margin-top:14px;font-size:.875rem}
+  .panel{padding:max(72px,calc(env(safe-area-inset-top,0px) + 60px)) 24px max(66px,calc(env(safe-area-inset-bottom,0px) + 56px))}
+  h1{font-size:clamp(25px,7vh,36px)}
+  .sub{margin-top:14px;font-size:14px}
   .cta{margin-top:20px}
 }
 @media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
   .btn,.cta .btn-ghost,.learn,.nav a{transition:none}
 }
 </style>
@@ -305,7 +269,7 @@ h1 em{font-style:normal;color:var(--accent)}
 <div class="stage">
   <!-- no src: JS attaches a blob once prefetched, so scrubbing seeks locally -->
   <video id="clip" muted playsinline preload="auto" disablepictureinpicture></video>
-  <div class="scrim"></div>
+  <div class="veil"></div>
   <div class="grain"></div>
 </div>
 
@@ -328,7 +292,7 @@ h1 em{font-style:normal;color:var(--accent)}
       <h1>Send USDC to a <em>username</em>, not an address.</h1>
       <p class="sub">Type a name, pick an amount, confirm. The funds leave your wallet and land in theirs in the same block. No seed phrase is ever asked for, and nothing is held in between.</p>
       <div class="cta">
-        <a class="btn btn-lg" href="https://adebisi1111.github.io/send-app/">Open Ease</a>
+        <a class="btn" href="https://adebisi1111.github.io/send-app/">Open Ease</a>
         <a class="btn-ghost" href="#how">See how it works</a>
       </div>
       <a class="learn" href="https://arc.etherscan.io/address/0x55484b461534e065e3e46f13c20c89d26b913339">Read the contracts on explorer &rarr;</a>
@@ -341,7 +305,7 @@ h1 em{font-style:normal;color:var(--accent)}
       <h1>There is no escrow. It moves <em>now</em>, or it never moved.</h1>
       <p class="sub">Most payment requests park your money until somebody releases it. Ease has no such state. Payment is a single transfer, so there is no waiting, no counterparty risk, and no balance you do not control.</p>
       <div class="cta">
-        <a class="btn btn-lg" href="https://adebisi1111.github.io/send-app/">Try a send</a>
+        <a class="btn" href="https://adebisi1111.github.io/send-app/">Try a send</a>
         <a class="btn-ghost" href="#safety">How it is built</a>
       </div>
     </div>
@@ -353,7 +317,7 @@ h1 em{font-style:normal;color:var(--accent)}
       <h1>Name the amount. They tap <span class="handle">Pay</span>.</h1>
       <p class="sub">Ask for money for a specific reason and the payer sees exactly what it is for. They accept or decline in one tap, and a decline is final &mdash; nothing moves, and nothing is left pending.</p>
       <div class="cta">
-        <a class="btn btn-lg" href="https://adebisi1111.github.io/send-app/">Open Ease</a>
+        <a class="btn" href="https://adebisi1111.github.io/send-app/">Open Ease</a>
       </div>
     </div>
   </section>
