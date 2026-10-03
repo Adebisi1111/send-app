@@ -1058,8 +1058,16 @@ export default function Pay() {
       {note && (
         <div className="msg msg-ok" onMouseEnter={() => clearFlash()}>
           <span className="msg-txt">{note}</span>
-          <button className="msg-x" onClick={clearFlash} aria-label="Dismiss">
-            {noteLeft}s ✕
+          {/* A ring that empties as the note expires, rather than a raw seconds
+              counter. The number stays available to assistive tech. */}
+          <button
+            className="msg-ring"
+            style={{ '--pct': `${notePct.toFixed(1)}%` } as CSSProperties}
+            onClick={clearFlash}
+            aria-label={`Dismiss confirmation, ${noteLeft} seconds remaining`}
+            title="Dismiss"
+          >
+            <span aria-hidden="true">✕</span>
           </button>
         </div>
       )}
