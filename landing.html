@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ease — USDC by username on Arc</title>
+<meta name="description" content="Send USDC to anyone on Arc by their username. No addresses, no seed phrases, no waiting.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://d2ol7oe51mr4n9.cloudfront.net" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   Ease — landing
+   ------------------------------------------------------------
+   The footage is high-key (measured mean luma 233/255), so this
+   goes DARK by inverting the type rather than darkening the ink:
+   near-black veil under off-white type. Dark ink over this
+   footage was measured at 3.11:1 and falling — it cannot reach AA
+   at any alpha strong enough to matter.
+   ============================================================ */
+:root{
+  --bg:#0a0b0d;            /* canvas, matches the darkest veil stop */
+  --bg-2:#0f1011;          /* raised surface */
+  --fg:#f4f6f8;            /* 18.17:1 on --bg */
+  --fg-soft:#a8b0b8;       /*  8.97:1 */
+  --fg-mute:#8b949c;       /*  6.39:1 — the floor for all body copy */
+  --fg-faint:#5c656e;      /* decorative only, never load-bearing text */
+  --line:rgba(244,246,248,.11);
+  --line-2:rgba(244,246,248,.18);
+  --accent:#4ade9e;        /* 11.47:1 on --bg */
+  --accent-dim:rgba(74,222,158,.14);
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --pill-bg:#f4f6f8;
+  --pill-fg:#0a0b0d;
+  --serif:'Inter Tight','Helvetica Neue',Helvetica,Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--serif);
+  font-weight:400;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;
+}
+
+/* ---------------------------------------------------------- stage */
+.stage{position:fixed;inset:0;z-index:0;overflow:hidden;background:var(--bg)}
+.stage video{
+  position:absolute;top:50%;left:50%;width:100%;height:100%;
+  transform:translate(-50%,-50%) scale(1.02);
+  object-fit:cover;filter:contrast(1.08) brightness(.92) saturate(.95);
+  will-change:transform;
+}
+/* the veil is what makes "dark" possible over bright footage: it holds the
+   canvas near-black so type never has to compete with the render */
+/* A uniform veil cannot serve both jobs. Measured: at the alpha needed for
+   the sub-copy to clear 4.5:1, only ~30% of the footage survives and the scrub
+   stops reading as a scrub. So the scrim is LOCALISED — heavy where the
+   headline and sub-copy sit, light everywhere else — and the mid-band is left
+   deliberately thin so the render is actually visible. */
+.veil{
+  position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(to bottom,rgba(10,11,13,.88) 0%,rgba(10,11,13,.30) 20%,rgba(10,11,13,.10) 44%,rgba(10,11,13,.30) 72%,rgba(10,11,13,.90) 100%),
+    radial-gradient(64% 46% at 50% 50%,rgba(10,11,13,.80) 0%,rgba(10,11,13,.58) 46%,rgba(10,11,13,.16) 74%,rgba(10,11,13,0) 100%),
+    linear-gradient(to bottom,rgba(10,11,13,.70) 0%,rgba(10,11,13,.18) 26%,rgba(10,11,13,.18) 70%,rgba(10,11,13,.76) 100%);
+}
+/* grain stops the big flat wash from banding on 8-bit displays */
+.grain{
+  position:absolute;inset:-50%;opacity:.16;mix-blend-mode:overlay;pointer-events:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.5'/></svg>");
+}
+
+/* ---------------------------------------------------------- chrome */
+.chrome{
+  position:fixed;left:0;right:0;top:0;z-index:40;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:max(14px,calc(env(safe-area-inset-top,0px) + 12px)) clamp(16px,3.4vw,44px) 14px;
+  background:linear-gradient(to bottom,rgba(10,11,13,.92) 0%,rgba(10,11,13,.62) 72%,rgba(10,11,13,0) 100%);
+}
+.mark{display:flex;align-items:center;gap:9px;font-size:16px;letter-spacing:-.018em;font-weight:500;color:var(--fg);min-width:0;flex-shrink:1}
+.mark-star{color:var(--accent);opacity:.95;font-size:15px}
+.nav{display:flex;align-items:center;gap:clamp(14px,2.4vw,32px);flex-shrink:0}
+.nav a:not(.pill){
+  color:var(--fg);text-decoration:none;font-size:14.5px;letter-spacing:-.008em;
+  opacity:.82;transition:opacity .3s var(--ease);
+  /* 14.5px type on its own is a 17px hit area. This lifts it to 40px without
+     altering how the link looks — the padding is invisible, the target is not. */
+  padding:11px 2px;
+}
+.nav a:not(.pill):hover,.nav a:not(.pill):focus-visible{opacity:1}
+
+.pill{
+  display:inline-flex;align-items:center;justify-content:center;height:40px;
+  padding:0 21px;border-radius:999px;background:var(--pill-bg);color:var(--pill-fg);
+  font-size:14.5px;font-weight:500;letter-spacing:-.008em;text-decoration:none;
+  white-space:nowrap;opacity:1;border:1px solid rgba(244,246,248,.10);
+  box-shadow:0 1px 0 rgba(0,0,0,.20) inset;
+  -webkit-text-fill-color:var(--pill-fg);
+  transition:transform .4s var(--ease),background .3s var(--ease),color .3s var(--ease);
+}
+/* forced, or the nav's inherited link colour bleeds into the light pill on
+   mobile Safari and the label vanishes */
+.nav .pill{color:#0a0b0d;-webkit-text-fill-color:#0a0b0d}
+.pill:hover,.pill:focus-visible{
+  transform:translateY(-2px);background:#fff;color:#0a0b0d;
+  -webkit-text-fill-color:#0a0b0d;
+}
+.pill:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+.foot{
+  position:fixed;bottom:0;left:0;right:0;z-index:40;display:flex;justify-content:center;
+  padding:14px clamp(16px,4vw,24px) max(16px,calc(env(safe-area-inset-bottom,0px) + 12px));
+  font-size:12px;line-height:1.45;letter-spacing:.02em;color:var(--fg-faint);
+  text-align:center;pointer-events:none;
+  background:linear-gradient(to top,rgba(10,11,13,.92) 0%,rgba(10,11,13,.66) 72%,rgba(10,11,13,0) 100%);
+}
+.meter{
+  position:fixed;top:0;left:0;z-index:50;height:2px;width:100%;
+  transform:scaleX(0);transform-origin:0 50%;background:var(--accent);opacity:.9;
+}
+
+/* ---------------------------------------------------------- panels */
+.panels{position:fixed;inset:0;z-index:20;pointer-events:none}
+.panel{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  padding:max(112px,calc(env(safe-area-inset-top,0px) + 92px)) clamp(20px,5vw,60px)
+          max(104px,calc(env(safe-area-inset-bottom,0px) + 88px));
+  opacity:0;will-change:opacity,transform;
+}
+.eyebrow{
+  display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 12px;
+  font-size:12.5px;letter-spacing:.045em;color:var(--fg-soft);
+  margin-bottom:clamp(18px,2.2vw,26px);max-width:min(46ch,100%);text-align:center;
+}
+.eyebrow .tick{color:var(--accent)}
+h1{
+  margin:0;font-weight:500;font-size:clamp(36px,7.4vw,108px);line-height:.96;
+  letter-spacing:-.04em;max-width:15ch;text-wrap:balance;color:var(--fg);
+}
+h1 em{font-style:normal;color:var(--accent)}
+.sub{
+  margin:clamp(18px,2.2vw,28px) 0 0;font-size:clamp(15px,1.28vw,19px);
+  line-height:1.5;letter-spacing:-.008em;color:var(--fg-soft);
+  max-width:min(46ch,100%);text-wrap:pretty;
+}
+.cta{margin-top:clamp(28px,3.4vw,44px);pointer-events:auto;width:100%;display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.cta .pill{height:48px;padding:0 27px;font-size:15px;max-width:min(100%,320px)}
+.cta .ghost{
+  display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 24px;
+  border-radius:999px;border:1px solid var(--line-2);color:var(--fg);
+  text-decoration:none;font-size:15px;background:rgba(10,11,13,.5);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  transition:border-color .3s var(--ease),transform .4s var(--ease);
+}
+.cta .ghost:hover,.cta .ghost:focus-visible{border-color:var(--accent);transform:translateY(-2px)}
+
+/* the username is the product: set it in mono so it reads as an identifier,
+   not a word — this is also what fixes the "ease isn't speaking" problem */
+.handle{
+  font-family:var(--mono);font-size:.62em;letter-spacing:-.01em;color:var(--accent);
+  background:var(--accent-dim);border:1px solid rgba(74,222,158,.28);
+  padding:.06em .34em;border-radius:8px;white-space:nowrap;
+}
+
+/* ---------------------------------------------------------- boot */
+.boot{
+  position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;background:var(--bg);
+  transition:opacity .7s var(--ease),visibility .7s;
+}
+.boot.done{opacity:0;visibility:hidden}
+.boot p{font-size:12.5px;letter-spacing:.05em;color:var(--fg-mute);margin:0}
+.bar{width:150px;height:1px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:100%;background:var(--accent);transform:scaleX(0);transform-origin:0 50%}
+
+/* the whole page height lives here; nothing else scrolls visually */
+.track{position:relative;z-index:1;height:560vh;min-height:3200px}
+
+@media (max-width:900px){
+  .veil{
+    background:
+      linear-gradient(to bottom,rgba(10,11,13,.92) 0%,rgba(10,11,13,.38) 22%,rgba(10,11,13,.20) 46%,rgba(10,11,13,.38) 74%,rgba(10,11,13,.94) 100%),
+      radial-gradient(78% 52% at 50% 50%,rgba(10,11,13,.86) 0%,rgba(10,11,13,.66) 48%,rgba(10,11,13,.20) 78%,rgba(10,11,13,0) 100%),
+      linear-gradient(to bottom,rgba(10,11,13,.74) 0%,rgba(10,11,13,.24) 26%,rgba(10,11,13,.24) 70%,rgba(10,11,13,.80) 100%);
+  }
+}
+@media (max-width:720px){
+  .nav a:not(.pill){display:none}
+  .mark{font-size:14.5px}
+  .nav .pill{height:38px;padding:0 16px;font-size:13.5px}
+  h1{max-width:12ch;font-size:clamp(30px,9.8vw,52px)}
+  .sub{font-size:15px;max-width:34ch}
+  .panel{padding:max(96px,calc(env(safe-area-inset-top,0px) + 80px)) 18px max(92px,calc(env(safe-area-inset-bottom,0px) + 76px))}
+  .foot{font-size:11px;max-width:34ch}
+}
+@media (max-width:420px){
+  .mark-star{display:none}
+  .nav .pill{height:36px;padding:0 14px;font-size:13px}
+  h1{max-width:11ch;font-size:clamp(28px,10.5vw,40px)}
+  .eyebrow{font-size:11px;letter-spacing:.04em;max-width:28ch}
+  .cta .pill{width:100%;max-width:280px;height:44px;padding:0 20px;font-size:14px}
+}
+@media (max-height:520px) and (orientation:landscape){
+  .panel{padding:max(76px,calc(env(safe-area-inset-top,0px) + 60px)) 24px max(68px,calc(env(safe-area-inset-bottom,0px) + 52px))}
+  h1{font-size:clamp(28px,8vh,44px)}
+  .sub{margin-top:12px;font-size:14px}
+  .cta{margin-top:16px}
+}
+/* a scrubbed video is exactly the kind of motion this query exists to stop */
+@media (prefers-reduced-motion:reduce){
+  .pill,.cta .ghost{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="boot" id="boot">
+  <div class="bar"><i id="bootBar"></i></div>
+  <p id="bootPct">LOADING 0%</p>
+</div>
+
+<div class="stage">
+  <!-- no src: JS attaches a blob when the prefetch succeeds, so seeking is
+       local rather than a range request per scrub step -->
+  <video id="clip" muted playsinline preload="auto" disablepictureinpicture></video>
+  <div class="veil"></div>
+  <div class="grain"></div>
+</div>
+
+<i class="meter" id="meter"></i>
+
+<header class="chrome">
+  <div class="mark"><span class="mark-star" aria-hidden="true">&#9679;</span>Ease</div>
+  <nav class="nav">
+    <a href="#how">How it works</a>
+    <a href="#open">Open the app</a>
+    <a class="pill" href="https://adebisi1111.github.io/send-app/">Launch app</a>
+  </nav>
+</header>
+
+<main class="panels">
+
+  <section class="panel" data-panel>
+    <div class="eyebrow">Live on Arc mainnet <span>&middot;</span> chain 5042</div>
+    <h1>Send USDC.<br />Skip the address.</h1>
+    <p class="sub">Type a username, pick an amount, and the money goes straight to their wallet. No seed phrase, no exchange, nothing in between.</p>
+    <div class="cta">
+      <a class="pill" href="https://adebisi1111.github.io/send-app/">Open Ease</a>
+      <a class="ghost" href="#how">See how it works</a>
+    </div>
+  </section>
+
+  <section class="panel" data-panel>
+    <div class="eyebrow">The part that matters <span>&middot;</span> non-custodial</div>
+    <h1>It moves <em>now</em><br />or it never moved.</h1>
+    <p class="sub">No escrow, no pending balance, no waiting on a release. The USDC leaves your wallet and lands in theirs in the same block.</p>
+    <div class="cta">
+      <a class="pill" href="https://adebisi1111.github.io/send-app/">Try a send</a>
+    </div>
+  </section>
+
+  <section class="panel" data-panel>
+    <div class="eyebrow">Asking someone <span>&middot;</span> one tap for them</div>
+    <h1>Request it.<br />They hit <span class="handle">Pay</span>.</h1>
+    <p class="sub">Name the amount and the reason. They see exactly what it's for and pay or decline in one tap — no account needed to send.</p>
+    <div class="cta">
+      <a class="pill" href="https://adebisi1111.github.io/send-app/">Open Ease</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">Ease &nbsp;&middot;&nbsp; built on Arc &nbsp;&middot;&nbsp; your keys never leave your wallet</footer>
+
+<div class="track"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var VIDEO_URL = "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/45567745-d826-44a2-a5ce-7ef670944e60.mp4";
+  // 1920x1080, 10.04s, 241 frames, ALL-INTRA: every frame is a keyframe, which is
+  // what lets a scroll position land on an exact frame instantly instead of
+  // decoding forward from the previous one.
+
+  var clip    = document.getElementById("clip");
+  var boot    = document.getElementById("boot");
+  var bootBar = document.getElementById("bootBar");
+  var bootPct = document.getElementById("bootPct");
+  var meter   = document.getElementById("meter");
+  var panels  = [].slice.call(document.querySelectorAll("[data-panel]"));
+
+  // Each panel owns [fadeInStart, fadeInEnd, fadeOutStart, fadeOutEnd] of page
+  // progress. The gaps BETWEEN one panel's fadeOutEnd and the next panel's
+  // fadeInStart are deliberate dead zones — video only, no copy — so two
+  // panels are never readable at the same moment.
+  var CUES = [
+    [0.00, 0.00, 0.15, 0.23],
+    [0.35, 0.43, 0.57, 0.65],
+    [0.77, 0.85, 1.10, 1.20]
+  ];
+  var DRIFT = 22; // px of counter-scroll travel per panel
+
+  var progress = 0, seekTo = 0, seekAt = 0, duration = 0, ready = false;
+  var started = false, attached = false;
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+  function smooth(t){ return t*t*(3-2*t); }
+  function ramp(p,a,b){
+    if (b <= a) return p >= b ? 1 : 0;
+    return smooth(clamp((p-a)/(b-a),0,1));
+  }
+
+  function readScroll(){
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    progress = max > 0 ? clamp(window.pageYOffset/max,0,1) : 0;
+    if (duration) seekTo = progress * duration;
+  }
+
+  function paint(){
+    meter.style.transform = "scaleX(" + progress + ")";
+    for (var i=0;i<panels.length;i++){
+      var c = CUES[i]; if (!c) continue;
+      var el  = panels[i];
+      var enter = ramp(progress, c[0], c[1]);
+      var leave = ramp(progress, c[2], c[3]);
+      var o = enter * (1 - leave);
+      // panels drift against the scroll direction, which reads as parallax
+      // without ever moving the page content itself
+      var y = (1 - enter) * DRIFT - leave * DRIFT;
+      el.style.opacity = o;
+      el.style.transform = "translate3d(0," + y + "px,0)";
+      el.style.pointerEvents = o > 0.6 ? "auto" : "none";
+      // hidden copy must not be reachable by keyboard or a screen reader
+      el.setAttribute("aria-hidden", o > 0.02 ? "false" : "true");
+    }
+  }
+
+  function frame(){
+    if (ready && duration && !reduce){
+      var gap = seekTo - seekAt;
+      if (Math.abs(gap) > 0.0008){
+        // easing currentTime toward the scroll target, rather than snapping to
+        // it, is the difference between a smooth scrub and a slideshow
+        seekAt += gap * 0.115;
+        if (clip.readyState >= 2 && !clip.seeking){
+          try { clip.currentTime = seekAt; } catch(e){}
+        }
+      }
+    }
+    paint();
+    requestAnimationFrame(frame);
+  }
+
+  function setProgress(f){
+    bootBar.style.transform = "scaleX(" + f + ")";
+    bootPct.textContent = "LOADING " + Math.round(f*100) + "%";
+  }
+
+  function start(){
+    if (started) return;
+    started = true;
+    ready = true;
+    boot.className = "done";
+    readScroll();
+    seekAt = seekTo;
+  }
+
+  function attach(src){
+    if (attached) return;
+    attached = true;
+    clip.addEventListener("loadedmetadata", function(){
+      duration = clip.duration || 0;
+      clip.pause();
+      readScroll();
+      seekAt = seekTo;
+      try { clip.currentTime = seekAt; } catch(e){}
+    });
+    clip.addEventListener("loadeddata", start);
+    clip.addEventListener("canplaythrough", start);
+    clip.addEventListener("error", start);
+    clip.src = src;
+    clip.load();
+    // a stalled decode must never strand the page behind the preloader
+    setTimeout(start, 12000);
+  }
+
+  function preload(){
+    var bail = setTimeout(function(){
+      attach(VIDEO_URL); // stream directly rather than sit on a dead fetch
+      setProgress(1);
+    }, 15000);
+    var ctrl = window.AbortController ? new AbortController() : null;
+
+    fetch(VIDEO_URL, ctrl ? { signal: ctrl.signal } : undefined)
+      .then(function(res){
+        if (!res.ok || !res.body) throw new Error("no stream");
+        var len = res.headers.get("content-length");
+        var total = len ? parseInt(len,10) : 0;
+        var reader = res.body.getReader();
+        var chunks = [], got = 0;
+
+        // pull the whole file into memory first: seeking inside a buffered
+        // blob is near instant, whereas a range request per scrub step is a
+        // slideshow
+        function pump(){
+          return reader.read().then(function(r){
+            if (r.done){
+              return new Blob(chunks, { type:"video/mp4" });
+            }
+            chunks.push(r.value);
+            got += r.value.length;
+            // the 11e6 fallback is the approximate size used when the server
+            // sends no content-length at all
+            setProgress(total ? got/total : Math.min(got/11e6, 0.95));
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .then(function(blob){
+        clearTimeout(bail);
+        setProgress(1);
+        attach(URL.createObjectURL(blob));
+      })
+      .catch(function(){
+        clearTimeout(bail);          // covers CORS failure, abort and offline
+        setProgress(1);
+        attach(VIDEO_URL);
+      });
+  }
+
+  // iOS will not paint a frame from a video that has never been played, so
+  // nudge it once on the first interaction and pause immediately
+  function unlock(){
+    var p = clip.play();
+    if (p && p.then) p.then(function(){ clip.pause(); }).catch(function(){});
+    else clip.pause();
+  }
+  ["touchstart","pointerdown","wheel","keydown"].forEach(function(ev){
+    window.addEventListener(ev, unlock, { once:true, passive:true });
+  });
+
+  window.addEventListener("scroll", readScroll, { passive:true });
+  window.addEventListener("resize", readScroll);
+
+  readScroll();
+  paint();
+  preload();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
