@@ -211,9 +211,14 @@ h1 em{font-style:normal;color:var(--brand)}
 /* the entire page height; nothing else scrolls visually */
 .track{position:relative;z-index:1;height:520vh;min-height:3000px}
 
+/* the brand repeats here so the lockup is not stranded in the header alone */
+.foot-mark{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:var(--ink)}
+.foot-mark .mark-glyph{width:15px;height:15px}
+
 .foot{
   position:fixed;bottom:0;left:0;right:0;z-index:40;
   display:flex;justify-content:space-between;align-items:center;gap:16px;
+  flex-wrap:wrap;
   padding:14px clamp(16px,3.2vw,40px) max(14px,calc(env(safe-area-inset-bottom,0px) + 12px));
   font-size:11.5px;letter-spacing:.01em;color:var(--ink-2);pointer-events:none;
   background:rgba(244,246,244,.82);
@@ -268,7 +273,7 @@ h1 em{font-style:normal;color:var(--brand)}
 
 <div class="stage">
   <!-- no src: JS attaches a blob once prefetched, so scrubbing seeks locally -->
-  <video id="clip" muted playsinline preload="auto" disablepictureinpicture></video>
+  <video id="clip" muted loop autoplay playsinline preload="auto" disablepictureinpicture></video>
   <div class="veil"></div>
   <div class="grain"></div>
 </div>
@@ -286,7 +291,7 @@ h1 em{font-style:normal;color:var(--brand)}
 
 <main class="panels">
 
-  <section class="panel" data-panel>
+  <section class="panel" data-panel id="how">
     <div class="panel-inner">
       <p class="eyebrow"><span class="dot"></span>Live on Arc mainnet &middot; chain 5042</p>
       <h1>Send USDC to a <em>username</em>, not an address.</h1>
@@ -299,7 +304,7 @@ h1 em{font-style:normal;color:var(--brand)}
     </div>
   </section>
 
-  <section class="panel" data-panel>
+  <section class="panel" data-panel id="safety">
     <div class="panel-inner">
       <p class="eyebrow"><span class="dot"></span>Non-custodial by construction</p>
       <h1>There is no escrow. It moves <em>now</em>, or it never moved.</h1>
@@ -311,7 +316,7 @@ h1 em{font-style:normal;color:var(--brand)}
     </div>
   </section>
 
-  <section class="panel" data-panel>
+  <section class="panel" data-panel id="requests">
     <div class="panel-inner">
       <p class="eyebrow"><span class="dot"></span>Requests settle in one tap</p>
       <h1>Name the amount. They tap <span class="handle">Pay</span>.</h1>
@@ -325,7 +330,8 @@ h1 em{font-style:normal;color:var(--brand)}
 </main>
 
 <footer class="foot">
-  <span>Ease &middot; built on Arc</span>
+  <span class="foot-mark"><span class="mark-glyph" aria-hidden="true"></span>Ease</span>
+  <span>Built on Arc</span>
   <span>Your keys never leave your wallet</span>
 </footer>
 
@@ -360,6 +366,13 @@ h1 em{font-style:normal;color:var(--brand)}
 
   var progress = 0, seekTo = 0, seekAt = 0, duration = 0, ready = false;
   var started = false, attached = false;
+  // Ambient mode: on arrival the clip plays by itself so the page is alive
+  // before anyone scrolls. The first real scroll intent takes control and
+  // never gives it back, because handing back and forth fights the user.
+  var ambient = true;
+  // ~14 writes/sec: smooth to the eye, slow enough for the decoder to land each
+  // seek. Measured against the all-intra blob; a per-frame write starves it.
+  var WRITE_MS = 70, lastWrite = 0;
 
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -374,6 +387,18 @@ h1 em{font-style:normal;color:var(--brand)}
     var max = document.documentElement.scrollHeight - window.innerHeight;
     progress = max > 0 ? clamp(window.pageYOffset/max,0,1) : 0;
     if (duration) seekTo = progress * duration;
+  }
+
+  // First scroll intent takes the wheel: pause the ambient loop, snap the
+  // video to wherever the page actually is, and hand over permanently.
+  function takeControl(){
+    if (!ambient) return;
+    ambient = false;
+    clip.pause();
+    // Only re-anchor on the element's real position. Setting seekAt = seekTo
+    // here zeroes the loop's gap and freezes the frame permanently.
+    seekAt = clip.currentTime;
+    readScroll();
   }
 
   function paint(){
@@ -396,13 +421,46 @@ h1 em{font-style:normal;color:var(--brand)}
   }
 
   function frame(){
-    if (ready && duration && !reduce){
+    // Belt-and-braces handover: if the page moved while we still believe we are
+    // ambient, take control now. This catches scroll paths that never fire
+    // wheel/touch/keydown — a scrollbar drag, a restored position, find-in-page,
+    // or a programmatic scrollTo.
+    if (ambient && progress > 0.001) takeControl();
+
+    if (ready && duration && !reduce && !ambient){
       var gap = seekTo - seekAt;
       if (Math.abs(gap) > 0.0008){
-        // easing currentTime toward the scroll target, rather than snapping to
-        // it, is the difference between a smooth scrub and a slideshow
-        seekAt += gap * 0.115;
-        if (clip.readyState >= 2 && !clip.seeking){
+        // Easing currentTime toward the scroll target, rather than snapping to
+        // it, is the difference between a smooth scrub and a slideshow. But an
+        // exponential approach never actually arrives: at 0.115/frame a 10s
+        // jump takes over a second to close, so the frame visibly lags the copy.
+        // So ease for small corrections (where the smoothing matters) and snap
+        // once the remaining gap is under a third of a frame at 24fps — below
+        // what anyone can perceive.
+        // Snap when the remaining gap is imperceptible, but ONLY once the
+        // write has actually been accepted. Gating the write on
+        // `readyState >= 2 && !seeking` looked cautious and was actively
+        // broken: a long jump starves the decoder, readyState drops to 1
+        // (HAVE_METADATA), the write is skipped, and because the snap above
+        // had already declared convergence, the frame froze mid-flight and
+        // never recovered. Measured 7 times in 12 full-length jumps.
+        //
+        // Assigning currentTime during a seek is legal — the browser simply
+        // retargets — so the guard is unnecessary. Instead: only treat the
+        // value as settled when the element agrees, and force a catch-up
+        // write whenever the media becomes seekable again.
+        // Scale the step to the size of the correction. A 0.02s nudge (ordinary
+        // scrolling) keeps the silky 0.115 factor; a 10s discontinuity (a nav
+        // link, a scrollbar flick) is not a correction but a jump, and easing it
+        // across five seconds feels broken. Step proportionally so both land
+        // quickly, then snap for the last imperceptible sliver.
+        var step = gap > 1.2 || gap < -1.2 ? 0.34 : 0.115;
+        seekAt = Math.abs(gap) < 0.014 ? seekTo : seekAt + gap * step;
+        // Write at a fixed cadence only. Writing on every frame retargets the
+        // seek faster than the decoder can answer, so none ever completes.
+        var now = performance.now();
+        if (!clip.seeking && now - lastWrite > WRITE_MS){
+          lastWrite = now;
           try { clip.currentTime = seekAt; } catch(e){}
         }
       }
@@ -410,6 +468,16 @@ h1 em{font-style:normal;color:var(--brand)}
     paint();
     requestAnimationFrame(frame);
   }
+
+  // If a seek is dropped or the decoder starves mid-jump, re-assert the target
+  // once the media reports it can play again. Without this the frame can sit
+  // several seconds away from the copy it is supposed to illustrate.
+  ["canplay","seeked","loadeddata"].forEach(function(ev){
+    clip.addEventListener(ev, function(){
+      if (ambient || !ready || !duration) return;
+      if (Math.abs(clip.currentTime - seekTo) > 0.05) seekAt = clip.currentTime;
+    });
+  });
 
   function setProgress(f){
     bootBar.style.transform = "scaleX(" + f + ")";
@@ -423,6 +491,12 @@ h1 em{font-style:normal;color:var(--brand)}
     boot.className = "done";
     readScroll();
     seekAt = seekTo;
+    if (reduce || !ambient) return;
+    // let it play on arrival. Autoplay can still be refused (iOS before any
+    // gesture, or a strict autoplay policy), and that must not strand the
+    // page — the scrub below still works from a paused video.
+    var pr = clip.play();
+    if (pr && pr.then) pr.catch(function(){});
   }
 
   function attach(src){
@@ -500,8 +574,40 @@ h1 em{font-style:normal;color:var(--brand)}
     window.addEventListener(ev, unlock, { once:true, passive:true });
   });
 
-  window.addEventListener("scroll", readScroll, { passive:true });
+  // Nav links: panels are fixed-position and faded by the cue table, so a
+  // native anchor jump scrolls the page without revealing the target. Scroll
+  // to the point where that panel's cue has fully faded in instead.
+  var JUMP = { how: 0.06, safety: 0.50, requests: 0.86 };
+  function jumpTo(key, ev){
+    var target = JUMP[key];
+    if (target === undefined) return false;
+    if (ev) ev.preventDefault();
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    ambient = false;               // we are about to scroll; scrub owns the frame
+    clip.pause();
+    readScroll();
+    window.scrollTo({ top: Math.round(max * target), behavior: reduce ? "auto" : "smooth" });
+    seekTo = target * duration;
+    seekAt = seekTo;
+    return true;
+  }
+  document.querySelectorAll('a[href^="#"]').forEach(function(a){
+    var key = a.getAttribute("href").slice(1);
+    if (!(key in JUMP)) return;
+    a.addEventListener("click", function(ev){ jumpTo(key, ev); });
+  });
+
+  window.addEventListener("scroll", function(){
+    takeControl();
+    readScroll();
+  }, { passive:true });
   window.addEventListener("resize", readScroll);
+  // wheel and touch arrive before the scroll event on some browsers, and a
+  // keyboard PageDown may not scroll the window at all — so treat them as
+  // intent too
+  ["wheel","touchmove","keydown"].forEach(function(ev){
+    window.addEventListener(ev, takeControl, { passive:true });
+  });
 
   readScroll();
   paint();
