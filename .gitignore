@@ -43,3 +43,4 @@ prove-transfers.py
 check-landing.cjs
 check-pixels.cjs
 check-rhyme.cjs
+check-fixes.cjs
