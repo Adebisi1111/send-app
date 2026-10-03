@@ -44,3 +44,4 @@ check-landing.cjs
 check-pixels.cjs
 check-rhyme.cjs
 check-fixes.cjs
+check-motion.cjs
