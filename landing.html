@@ -214,6 +214,10 @@ h1 em{font-style:normal;color:var(--brand)}
 /* the brand repeats here so the lockup is not stranded in the header alone */
 .foot-mark{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:var(--ink)}
 .foot-mark .mark-glyph{width:15px;height:15px}
+/* Arc's own mark sits with the network credit. Its official file is white for
+   dark backgrounds, so it carries the brand gradient on light paper instead. */
+.foot-arc{display:inline-flex;align-items:center;gap:6px}
+.arc-mark{width:14px;height:14px;flex:none;display:block}
 
 .foot{
   position:fixed;bottom:0;left:0;right:0;z-index:40;
@@ -331,7 +335,7 @@ h1 em{font-style:normal;color:var(--brand)}
 
 <footer class="foot">
   <span class="foot-mark"><span class="mark-glyph" aria-hidden="true"></span>Ease</span>
-  <span>Built on Arc</span>
+  <span class="foot-arc"><svg class="arc-mark" viewBox="0 0 31 32" width="14" height="14" aria-hidden="true" focusable="false"><defs><linearGradient id="arcGrad" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#1C2998"/><stop offset="0.53" stop-color="#3E2B63"/><stop offset="1" stop-color="#942753"/></linearGradient></defs><path fill="url(#arcGrad)" d="M0 32C0.260374 24.166 1.59328 16.8547 3.82135 11.1696C6.64316 3.96673 10.728 0 15.3227 0C19.9174 0 24.0016 3.96673 26.824 11.1696C28.292 14.9157 29.372 19.3668 30.0119 24.2089C30.0691 24.6414 30.1178 25.0809 30.1678 25.5195C30.184 25.5466 30.1938 25.5718 30.1905 25.5923C30.1905 25.5923 30.5666 27.9326 30.6465 32H30.604C30.0462 31.5439 23.4681 26.3931 12.5636 27.8845C12.7282 26.0457 12.9544 24.2565 13.2467 22.5415C13.2617 22.4538 13.2789 22.3692 13.2942 22.2821C17.5711 22.1536 21.3146 22.6486 24.1853 23.2972C24.1746 23.2293 24.1657 23.1594 24.1547 23.0918C23.5647 19.4302 22.6941 16.0779 21.5717 13.2131C19.7364 8.52888 17.3416 5.61852 15.3227 5.61852C13.3038 5.61852 10.909 8.52888 9.07379 13.2131C8.62954 14.3462 8.22512 15.5545 7.86244 16.8291C7.35258 18.615 6.92424 20.5296 6.58214 22.5413C6.0758 25.5124 5.75944 28.6987 5.64292 32H0Z"/></svg>Built on Arc</span>
   <span>Your keys never leave your wallet</span>
 </footer>
 
@@ -366,13 +370,29 @@ h1 em{font-style:normal;color:var(--brand)}
 
   var progress = 0, seekTo = 0, seekAt = 0, duration = 0, ready = false;
   var started = false, attached = false;
-  // Ambient mode: on arrival the clip plays by itself so the page is alive
-  // before anyone scrolls. The first real scroll intent takes control and
-  // never gives it back, because handing back and forth fights the user.
-  var ambient = true;
+  // The clip ALWAYS plays. Scrolling additionally scrubs it, and once
+  // scrolling stops the clip picks up playing from wherever the scrub left it
+  // — so the page is never still, which is the actual requirement. An earlier
+  // version handed control over permanently on first scroll; that left the
+  // frame parked whenever the reader stopped, which is what looked broken.
+  var scrubbing = false;
+  // Playback resumes only once the scrub has actually ARRIVED, so a nav jump
+  // never leaves the render illustrating the previous panel. While it is still
+  // catching up the frame is visibly moving, which is what keeps the page
+  // alive — the resume is not what makes it feel alive. RESUME_CEIL is a
+  // backstop so a pathological decode can never strand the page in pause.
+  var RESUME_MS = 260;
+  // Measured worst case: ~2.4s to land a full-length jump while the page is
+  // under load. An earlier 1600ms ceiling fired mid-flight and reintroduced the
+  // very lag this design removes. The ceiling is only a backstop against a
+  // genuinely stuck decode, so it also requires the gap to have STOPPED
+  // shrinking — slow is fine, stuck is not.
+  var RESUME_CEIL = 6000;
+  var ARRIVE_TOL = 0.06;  // within this many seconds of the target = arrived
+  var STUCK_WINDOW = 400;  // ms without the gap improving before we call it stuck
   // ~14 writes/sec: smooth to the eye, slow enough for the decoder to land each
   // seek. Measured against the all-intra blob; a per-frame write starves it.
-  var WRITE_MS = 70, lastWrite = 0;
+  var WRITE_MS = 70, lastWrite = 0, resumeTimer = 0;
 
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -389,16 +409,60 @@ h1 em{font-style:normal;color:var(--brand)}
     if (duration) seekTo = progress * duration;
   }
 
-  // First scroll intent takes the wheel: pause the ambient loop, snap the
-  // video to wherever the page actually is, and hand over permanently.
-  function takeControl(){
-    if (!ambient) return;
-    ambient = false;
-    clip.pause();
-    // Only re-anchor on the element's real position. Setting seekAt = seekTo
-    // here zeroes the loop's gap and freezes the frame permanently.
+  // Scrolling begins a scrub: the clip follows the page. Only re-anchor on the
+  // element's real position here — setting seekAt = seekTo zeroes the loop's own
+  // gap check and freezes the frame permanently (that bug cost 12/12 jumps).
+  // Progress tracking: the best gap seen while scrubbing, when it was last
+  // improved, and when this scrub began.
+  var bestGap = Infinity, bestGapAt = 0, scrubStartedAt = 0;
+  function beginScrub(){
+    scrubbing = true;
+    bestGap = Infinity; bestGapAt = performance.now(); scrubStartedAt = bestGapAt;
+    clearTimeout(resumeTimer);   // cancel any pending hand-back
+    if (!clip.paused) clip.pause();
     seekAt = clip.currentTime;
     readScroll();
+  }
+
+  // Scrolling stopped. Hold the scrub until the frame has ARRIVED at its target,
+  // so the render always illustrates the panel the reader is actually looking
+  // at, then hand playback back so the motion resumes on its own.
+  //
+  // Two bugs lived here, both mine:
+  //   - the retry called endScrub(false), and every guard was gated on `first`,
+  //     so the FIRST retry bypassed the arrival check entirely and resumed
+  //     mid-flight with ~1s still to travel. Three rounds of tuning the tolerance
+  //     and the poll interval could not fix it, because the flag was the cause.
+  //   - judging progress poll-to-poll is unreliable here: readyState flips 4 -> 1
+  //     between seeks, so the gap closes in ~120ms plateaus and roughly half of
+  //     all samples show zero movement even while the decode is healthy.
+  //
+  // So: no flags. Every poll applies the same rule. Keep waiting while the frame
+  // is still within tolerance OR the decoder is demonstrably making progress,
+  // and only give up after a hard ceiling.
+  function endScrub(){
+    if (!scrubbing) return;
+    var now = performance.now();
+    var gap = Math.abs(clip.currentTime - seekTo);
+    if (gap < bestGap){ bestGap = gap; bestGapAt = now; }
+    var sinceStart = now - scrubStartedAt;
+    var improving = now - bestGapAt < STUCK_WINDOW;
+    var underCeiling = sinceStart < RESUME_CEIL;
+
+    if (gap > ARRIVE_TOL && (improving || underCeiling)){
+      resumeTimer = setTimeout(endScrub, 110);
+      return;
+    }
+    scrubbing = false;
+    clearTimeout(resumeTimer);
+    if (reduce || !ready) return;
+    var pr = clip.play();
+    if (pr && pr.then) pr.catch(function(){ /* autoplay may be refused */ });
+  }
+
+  function scheduleResume(){
+    clearTimeout(resumeTimer);
+    resumeTimer = setTimeout(endScrub, RESUME_MS);
   }
 
   function paint(){
@@ -421,13 +485,7 @@ h1 em{font-style:normal;color:var(--brand)}
   }
 
   function frame(){
-    // Belt-and-braces handover: if the page moved while we still believe we are
-    // ambient, take control now. This catches scroll paths that never fire
-    // wheel/touch/keydown — a scrollbar drag, a restored position, find-in-page,
-    // or a programmatic scrollTo.
-    if (ambient && progress > 0.001) takeControl();
-
-    if (ready && duration && !reduce && !ambient){
+    if (ready && duration && !reduce && scrubbing){
       var gap = seekTo - seekAt;
       if (Math.abs(gap) > 0.0008){
         // Easing currentTime toward the scroll target, rather than snapping to
@@ -474,7 +532,7 @@ h1 em{font-style:normal;color:var(--brand)}
   // several seconds away from the copy it is supposed to illustrate.
   ["canplay","seeked","loadeddata"].forEach(function(ev){
     clip.addEventListener(ev, function(){
-      if (ambient || !ready || !duration) return;
+      if (!scrubbing || !ready || !duration) return;
       if (Math.abs(clip.currentTime - seekTo) > 0.05) seekAt = clip.currentTime;
     });
   });
@@ -490,11 +548,10 @@ h1 em{font-style:normal;color:var(--brand)}
     ready = true;
     boot.className = "done";
     readScroll();
-    seekAt = seekTo;
-    if (reduce || !ambient) return;
-    // let it play on arrival. Autoplay can still be refused (iOS before any
-    // gesture, or a strict autoplay policy), and that must not strand the
-    // page — the scrub below still works from a paused video.
+    if (reduce) return;
+    // Play on arrival. Autoplay can still be refused (iOS before any gesture,
+    // or a strict autoplay policy); that must not strand the page, and a
+    // scrub still works from a paused video.
     var pr = clip.play();
     if (pr && pr.then) pr.catch(function(){});
   }
@@ -583,12 +640,12 @@ h1 em{font-style:normal;color:var(--brand)}
     if (target === undefined) return false;
     if (ev) ev.preventDefault();
     var max = document.documentElement.scrollHeight - window.innerHeight;
-    ambient = false;               // we are about to scroll; scrub owns the frame
-    clip.pause();
+    // Scrub to the target, then let the clip resume playing once the smooth
+    // scroll settles — same policy as any other scroll.
+    beginScrub();
     readScroll();
+    scheduleResume();
     window.scrollTo({ top: Math.round(max * target), behavior: reduce ? "auto" : "smooth" });
-    seekTo = target * duration;
-    seekAt = seekTo;
     return true;
   }
   document.querySelectorAll('a[href^="#"]').forEach(function(a){
@@ -597,16 +654,24 @@ h1 em{font-style:normal;color:var(--brand)}
     a.addEventListener("click", function(ev){ jumpTo(key, ev); });
   });
 
+  // Any scroll input starts a scrub and rearms the resume timer, so the clip
+  // picks back up on its own once the reader stops. `resize` alone must NOT
+  // scrub — it moves nothing.
   window.addEventListener("scroll", function(){
-    takeControl();
+    beginScrub();
     readScroll();
+    scheduleResume();
   }, { passive:true });
   window.addEventListener("resize", readScroll);
-  // wheel and touch arrive before the scroll event on some browsers, and a
-  // keyboard PageDown may not scroll the window at all — so treat them as
-  // intent too
-  ["wheel","touchmove","keydown"].forEach(function(ev){
-    window.addEventListener(ev, takeControl, { passive:true });
+  // wheel and touch can arrive before the scroll event on some browsers, and a
+  // keyboard PageDown may not scroll the window at all — treat them as intent
+  ["wheel","touchmove"].forEach(function(ev){
+    window.addEventListener(ev, beginScrub, { passive:true });
+  });
+  window.addEventListener("keydown", function(e){
+    if (["PageDown","PageUp","ArrowDown","ArrowUp","Home","End"," "].indexOf(e.key) === -1) return;
+    beginScrub();
+    scheduleResume();
   });
 
   readScroll();
