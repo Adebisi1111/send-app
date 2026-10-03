@@ -1,0 +1,67 @@
+/* ============================================================
+   Ease — shared design tokens
+   ------------------------------------------------------------
+   ONE source of truth for the landing page and the app. Both load
+   this file, which is why they rhyme instead of merely coexisting:
+   same canvas, same ink ramp, same accent, same radii, same type
+   scale, same motion curve.
+
+   Every value below was checked as a measured contrast ratio
+   against the surfaces it actually appears on — not chosen by eye.
+   Measured on --paper: ink 15.27:1, ink-2 5.84:1, ink-3 5.12:1,
+   brand 5.69:1 (6.19:1 on white), white-on-brand 6.19:1.
+
+   Geometry notes:
+   - radii are 8/12/16 (the app's existing set). Linear uses 4/6/8/12;
+     the landing was moved onto the app's scale rather than dragging the
+     app down to Linear's, because the app's controls already ship at
+     these sizes and 44px touch targets.
+   - display weight is 600, matching the app's existing wordmark.
+   ============================================================ */
+
+:root {
+  /* ---- surfaces ---- */
+  --paper:      #f4f6f4;
+  --surface:    #ffffff;
+  --surface-hi: #eef1ee;
+
+  /* ---- ink ramp ---- */
+  --ink:   #16211a;   /* 15.27:1 on --paper */
+  --ink-2: #54635a;   /*  5.84:1 */
+  --ink-3: #5c6c62;   /*  5.12:1 — the floor for any load-bearing text */
+
+  /* ---- hairlines ---- */
+  --line:   #e7ebe8;
+  --line-2: #dbe2dd;
+
+  /* ---- accent: the app's green, carried through ---- */
+  --brand:     #0d6f4c;   /* 5.69:1 on paper, 6.19:1 on white */
+  --brand-hi:  #0f8259;
+  --brand-dim: #0d6f4c1f;
+  --brand-ink: #ffffff;   /* 6.19:1 on --brand */
+
+  /* ---- status (app values, unchanged) ---- */
+  --danger:    #a32e21;
+  --danger-bg: #fdecea;
+  --ok-ink:    #0d6f4c;
+  --ok-bg:     #e7f4ee;
+  --warn-ink:  #8a5200;
+  --warn-bg:   #fbf1e2;
+
+  /* ---- radii ---- */
+  --r-sm: 8px;
+  --r:    12px;
+  --r-lg: 16px;
+
+  /* ---- type ---- */
+  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---- motion: one curve everywhere ---- */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+
+  /* ---- a minimum hit area, honoured by every control on both sides ---- */
+  --tap: 44px;
+
+  color-scheme: light;
+}
