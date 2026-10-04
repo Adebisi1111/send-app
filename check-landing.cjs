@@ -5,6 +5,10 @@
 // global install. Hardcoding an absolute path meant the checker could only
 // ever run on the machine that wrote it.
 const { chromium } = require(require.resolve('playwright', { paths: [__dirname] }));
+const { mkdirSync } = require('fs');
+const { join } = require('path');
+const SHOT_DIR = process.env.SHOT_DIR || join(__dirname, '.ui-shots');
+mkdirSync(SHOT_DIR, { recursive: true });
 
 const SIZES = [[1280,720],[1920,1080],[2560,1080],[768,1024],[390,844],[375,812],[320,640]];
 const URL = process.env.TARGET || 'http://127.0.0.1:8894/landing.html';
@@ -116,7 +120,9 @@ function PROBE() {
       String(w).padStart(4) + 'x' + String(h).padEnd(5) +
       (issues.length ? 'FAIL  ' + issues.join('  ') : 'pass')
     );
-    await page.screenshot({ path: `/home/administrator/.hermes/cache/screenshots/ease-${w}x${h}.png` });
+    // into a repo-local dir so this works on any machine, not just the one
+    // that wrote it. SHOT_DIR is created by verify-ui.mjs.
+    await page.screenshot({ path: `${SHOT_DIR}/ease-${w}x${h}.png` });
     await page.close();
   }
   await browser.close();

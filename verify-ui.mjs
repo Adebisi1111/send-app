@@ -69,7 +69,11 @@ function serve(port) {
 
 function run(file) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [file], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [file], {
+      cwd: ROOT,
+      env: { ...process.env, SHOT_DIR: join(ROOT, '.ui-shots') },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let out = '';
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (out += d));
