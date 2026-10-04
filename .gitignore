@@ -18,6 +18,8 @@ signer.mjs
 dev-signer.mjs
 fund.sh
 keys.txt
+# harness.html is the local anvil driver for those keys, so it stays out too.
+.pop-harness.html
 
 # forge script artifacts (contain tx payloads)
 broadcast/
@@ -40,10 +42,15 @@ trace-usdc.py
 trace-tx.py
 probe-logs.py
 prove-transfers.py
-check-landing.cjs
+# UI verification. Four of these run against files that ship, so a reviewer can
+# reproduce the README's numbers rather than take them on trust:
+#   check-landing  7/7 viewport sizes and contrast, on landing.html
+#   check-fixes    regression guard for the React className bug
+#   check-motion   the landing video keeps playing unattended
+#   check-popup    6/6 settled-request popup sizes
+#
+# check-pixels and check-rhyme stay out because they target
+# landing.linear.html, which is not in the tree - shipping them would hand a
+# reviewer a guaranteed ERR_CONNECTION_REFUSED.
 check-pixels.cjs
 check-rhyme.cjs
-check-fixes.cjs
-check-motion.cjs
-check-popup.cjs
-.pop-harness.html

@@ -231,6 +231,27 @@ npm run dev
 Targets Arc mainnet by default. Override with `VITE_RPC`, `VITE_USDC`,
 `VITE_REGISTRY` and `VITE_REQUESTS` in `src/pay.ts`.
 
+## Verifying it
+
+Everything this README claims can be re-run, not taken on trust.
+
+```bash
+npm run forge      # 125 contract tests
+npm test           # 55 frontend tests
+npm run test:ui    # 3 browser checks, starts its own server
+npm run verify     # lint + all of the above
+```
+
+`npm run test:ui` starts a static server on the port each checker expects, runs
+it against a real browser, and stops it. It needs a browser once:
+
+```bash
+npx playwright install chromium
+```
+
+That covers the 7/7 viewport sizes and contrast, the `className` regression
+guard, and the check that the landing video keeps playing unattended.
+
 ## Live
 
 https://adebisi1111.github.io/send-app
