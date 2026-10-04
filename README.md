@@ -6,6 +6,10 @@ reason, and let them choose — nothing is held in between.
 A wallet address is 42 characters and impossible to remember or check. `@adaeze`
 is neither.
 
+<p align="center">
+  <img src="assets/logo-512.png" width="128" alt="Ease">
+</p>
+
 ![Ease on Arc — send USDC to a username](docs/landing.jpg)
 
 <p align="center">
