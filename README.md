@@ -41,8 +41,8 @@ person named in the request may decline at all.
 
 | contract         | address                                      |
 | ---------------- | -------------------------------------------- |
-| PaymentRequest   | `0x55484b461534e065e3e46f13c20c89d26b913339` |
-| UsernameRegistry | `0x16aad5a31b750d9cc5641117d335b1ec848a6478` |
+| PaymentRequest   | `0xac1191658edbabd968c0227e5e952f6f83501f6b` |
+| UsernameRegistry | `0x31af44947e5c59dd180a0821b8513f74038f3999` |
 | USDC             | `0x3600000000000000000000000000000000000000` |
 
 Chain 5042. Earlier deployments are inert and should be ignored:
