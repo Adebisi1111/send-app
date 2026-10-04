@@ -6,6 +6,14 @@ reason, and let them choose — nothing is held in between.
 A wallet address is 42 characters and impossible to remember or check. `@adaeze`
 is neither.
 
+![Ease on Arc — send USDC to a username](docs/landing.jpg)
+
+<p align="center">
+  <img src="docs/mobile.jpg" width="240" alt="Ease on a phone">
+</p>
+
+**[Open the app](https://adebisi1111.github.io/send-app) — live on Arc mainnet.**
+
 ## The model
 
 The person who requests is the person who receives.
